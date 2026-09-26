@@ -1,303 +1,217 @@
 # C1_AE_DCT — Signal Compression with Autoencoder & DCT Baseline
-## Comprehensive Final Reproducibility Package & Execution Guide
 
-Project mã nguồn mở nghiên cứu và triển khai giải pháp nén tín hiệu sinh học nhiều kênh (Multichannel PPG & Tri-axial ACC) trên thiết bị đeo IoT. Dự án so sánh đối đầu giữa mô hình học sâu **1D-CNN Autoencoder (AE)** và thuật toán cơ sở **Discrete Cosine Transform (DCT)** dựa trên tập dữ liệu PPG-DaLiA.
+Project nghiên cứu và triển khai giải pháp n nén tín hiệu sinh học 4 kênh (Wrist PPG & Tri-axial Wrist ACC) từ tập dữ liệu thực nghiệm **PPG-DaLiA**. Dự án so sánh đối đầu giữa mô hình **1D-CNN Autoencoder (AE)** và thuật toán cơ sở **Discrete Cosine Transform (DCT)** theo quy trình 5-fold cross-validation độc lập theo đối tượng (Subject-Wise Split, $S1 \dots S15$).
 
 ---
 
 ## 📋 MỤC LỤC (TABLE OF CONTENTS)
-1. [Mục tiêu đề tài (Project Objectives)](#1-mục-tiêu-đề-tài-project-objectives)
-2. [Nguồn tải PPG-DaLiA (Dataset Download Source)](#2-nguồn-tải-ppg-dalia-dataset-download-source)
-3. [Cấu trúc thư mục (Directory Structure)](#3-cấu-trúc-thư-mục-directory-structure)
-4. [Tạo Environment & Cài đặt (Setup Environment)](#4-tạo-environment--cài-đặt-setup-environment)
-5. [Chuẩn bị Dataset (Dataset Preparation)](#5-chuẩn-bị-dataset-dataset-preparation)
-6. [Tạo Folds (Subject-Wise 5-Fold Split)](#6-tạo-folds-subject-wise-5-fold-split)
-7. [Chạy Preprocessing (Data Pipeline)](#7-chạy-preprocessing-data-pipeline)
-8. [Chạy DCT Baseline Experiments](#8-chạy-dct-baseline-experiments)
-9. [Chạy một AE Experiment (Pilot Run)](#9-chạy-một-ae-experiment-pilot-run)
-10. [Chạy toàn bộ 20 Main Runs](#10-chạy-toàn-bộ-20-main-runs)
-11. [Chạy Seed Experiments (Seed Robustness)](#11-chạy-seed-experiments-seed-robustness)
-12. [Đánh giá chỉ số Méo dạng (Evaluate Metrics)](#12-đánh-giá-chỉ-số-méo-dạng-evaluate-metrics)
-13. [Tạo Bảng biểu & Đồ thị (Generate Plots & Tables)](#13-tạo-bảng-biểu--đồ-thị-generate-plots--tables)
-14. [Vị trí Checkpoint / Log / Result (Outputs Directory)](#14-vị-trí-checkpoint--log--result-outputs-directory)
-15. [Cấu hình Phần cứng / Phần mềm (System Specs)](#15-cấu-hình-phần-cứng--phần-mềm-system-specs)
-16. [Những Experiment chưa hoàn thành / Hướng phát triển (Roadmap)](#16-những-experiment-chưa-hoàn-thành--hướng-phát-triển-roadmap)
+1. [Trạng thái Thực nghiệm & Phân định Kết quả (Experiment Status)](#1-trạng-thái-thực-nghiệm--phân-định-kết-quả-experiment-status)
+2. [Mục tiêu Đề tài (Project Objectives)](#2-mục-tiêu-đề-tài-project-objectives)
+3. [Nguồn tải PPG-DaLiA (Dataset Download Source)](#3-nguồn-tải-ppg-dalia-dataset-download-source)
+4. [Cấu trúc Thư mục (Directory Structure)](#4-cấu-trúc-thư-mục-directory-structure)
+5. [Thiết lập Môi trường (Environment Setup)](#5-thiết-lập-môi-trường-environment-setup)
+6. [Quy trình Preprocessing Thực nghiệm (Data Preprocessing Pipeline)](#6-quy-trình-preprocessing-thực-nghiệm-data-preprocessing-pipeline)
+7. [Chạy Real Pilot Run (Real Data Verification)](#7-chạy-real-pilot-run-real-data-verification)
+8. [Chạy 20 Main Runs (Main Experiments)](#8-chạy-20-main-runs-main-experiments)
+9. [Chạy Seed Experiments (Seed Stability)](#9-chạy-seed-experiments-seed-stability)
+10. [Đánh giá chỉ số Méo dạng (Evaluation & Metrics)](#10-đánh-giá-chỉ-số-méo-dạng-evaluation--metrics)
+11. [Vị trí Artifacts & Phân loại Synthetic vs Real Data](#11-vị-trí-artifacts--phân-loại-synthetic-vs-real-data)
 
 ---
 
-## 1. MỤC TIÊU ĐỀ TÀI (PROJECT OBJECTIVES)
+## 1. TRẠNG THÁI THỰC NGHIỆM & PHÂN ĐỊNH KẾT QUẢ (EXPERIMENT STATUS)
 
-- **Bài toán:** Nén tín hiệu 4 kênh bao gồm 1 kênh Quang thể tích đồ (PPG @ 64Hz) và 3 kênh Gia tốc kế (ACCx, ACCy, ACCz @ 32Hz) từ thiết bị đeo (Empatica E4) thu thập trong chuỗi hoạt động thể chất phức tạp.
-- **Phương pháp:**
-  1. **1D-CNN Autoencoder (AE):** Nén tín hiệu vật lý $4 \times 512$ thành không gian ẩn $M = 32 \times d_b$ ($d_b \in \{16, 8, 4, 2\}$ tương ứng $\text{CR}_{\text{dim}} \in \{4, 8, 16, 32\}$).
-  2. **Discrete Cosine Transform (DCT):** Thuật toán nén chuẩn baseline chọn $K$ hệ số lớn nhất với ngân sách byte khớp chính xác $B_{\text{DCT}} = B_{\text{AE}}$.
-- **Tiêu chuẩn đánh giá:**
+| Hạng mục | Trạng thái | Ghi chú / Chi tiết |
+| :--- | :--- | :--- |
+| **1. Unit Test / Code Logic** | ✅ **100% PASS** | 100% code logic, architecture, codec, metrics, loss & integration test suite pass. |
+| **2. Preprocessing Data Pipeline** | ✅ **100% READY** | Đã đọc đủ 15 subject $S1 \dots S15$, polyphase resample ACC 32->64Hz, train-only Z-score norm stats 5 folds. |
+| **3. Real Pilot Run** | 🔄 **TESTED / PENDING FINAL** | Đã verified trên Fold 1, $d_b=8$, seed 42 với dữ liệu thật PPG-DaLiA. |
+| **4. Real Main Runs (20 runs)** | ⏸️ **READY FOR CONFIRMATION** | Pipeline nén 20 runs (5 Folds $\times 4 d_b$) đã khóa spec, sẵn sàng kích hoạt sau khi nghiệm thu Pilot. |
+| **5. Seed Runs (10 runs)** | ⏸️ **READY FOR CONFIRMATION** | 10 runs bổ sung ($d_b=8$, seeds 42, 123, 999 trên cả 5 folds) sẵn sàng thực thi. |
+
+> [!IMPORTANT]
+> **Phân định Artifacts Synthetic vs Real Data:**
+> Các file sinh ra từ thử nghiệm synthetic/smoke-test trước đây đã được phân loại và cô lập trong thư mục `synthetic_smoke_test/`. Các artifact synthetic này **chỉ dùng để test kỹ thuật**, KHÔNG phải kết quả khoa học. Kết quả khoa học chính thức sẽ sinh ra 100% từ tập dữ liệu thực nghiệm PPG-DaLiA.
+
+---
+
+## 2. MỤC TIÊU ĐỀ TÀI (PROJECT OBJECTIVES)
+
+- **Bài toán:** Nén tín hiệu 4 kênh bao gồm 1 kênh Quang thể tích đồ Wrist PPG (BVP @ 64Hz) và 3 kênh Gia tốc kế Wrist ACC (ACCx, ACCy, ACCz @ 32Hz) từ thiết bị đeo thu thập trong các hoạt động phức tạp.
+- **Kiến trúc Mô hình:**
+  1. **1D-CNN Autoencoder (AE):** Conv1d (4->16->32->64) + Bottleneck Linear ($64 \to d_b$) + ConvTranspose1d ($d_b \to 64 \to 32 \to 16 \to 4$) với $d_b \in \{16, 8, 4, 2\}$.
+  2. **Discrete Cosine Transform (DCT):** DCT-II Top-K baseline với ngân sách byte $B_{\text{DCT}} = B_{\text{AE}}$.
+- **Đặc tả 5-Fold Subject-Wise:**
+  - Fold 1: Train S6-S15, Val S4-S5, Test S1-S3
+  - Fold 2: Train S1-S3, S9-S15, Val S7-S8, Test S4-S6
+  - Fold 3: Train S1-S6, S12-S15, Val S10-S11, Test S7-S9
+  - Fold 4: Train S1-S9, S15, Val S13-S14, Test S10-S12
+  - Fold 5: Train S3-S12, Val S1-S2, Test S13-S15
+- **Tiêu chuẩn Đánh giá:**
   - Đánh giá độc lập trên từng kênh (`PPG`, `ACCx`, `ACCy`, `ACCz`).
-  - Sử dụng các metric méo dạng trên tín hiệu vật lý: **PRD**, **PRDN** (dùng năng lượng mẫu trừ mean), và **RMSE**.
-  - Kiểm thử 5-fold cross-validation theo đối tượng (Subject-Wise Split, 15 đối tượng $S1 \dots S15$).
+  - Mẫu số PRDN dùng năng lượng mẫu trừ mean; denominator $\le 1e-12$ được đánh dấu undefined (valid_prdn=False), không cộng epsilon tùy tiện.
 
 ---
 
-## 2. NGUỒN TẢI PPG-DALIA (DATASET DOWNLOAD SOURCE)
+## 3. NGUỒN TẢI PPG-DALIA (DATASET DOWNLOAD SOURCE)
 
 Tập dữ liệu **PPG-DaLiA** công khai trên UCI Machine Learning Repository:
-- **Link tải trực tiếp:** [UCI Machine Learning Repository — PPG-DaLiA Dataset](https://archive.ics.uci.edu/dataset/495/ppg+dalia)
-- **Trích dẫn khoa học:**
-  > Reiss, A., Indlekofer, I., Schmidt, P., & Van Laerhoven, K. (2019). *Deep PPG: Large-Scale Heart Rate Estimation from Photoplethysmography Using Convolutional Neural Networks*. Sensors, 19(14), 3079.
-- **Định dạng file thô:** 15 file pickle từ `S1.pkl` đến `S15.pkl`.
+- **Link tải:** [UCI Machine Learning Repository — PPG-DaLiA Dataset](https://archive.ics.uci.edu/dataset/495/ppg+dalia)
+- **Định dạng:** 15 file pickle `S1.pkl` đến `S15.pkl`.
+- Thư mục chứa dữ liệu trong project: `ppg+dalia/data/PPG_FieldStudy/` hoặc `C1_AE_DCT/data/raw/`.
 
 ---
 
-## 3. CẤU TRÚC THƯ MỤC (DIRECTORY STRUCTURE)
+## 4. CẤU TRÚC THƯ MỤC (DIRECTORY STRUCTURE)
 
 ```text
 C1_AE_DCT/
 ├── configs/
-│   ├── config.json             # File cấu hình chung của dự án
-│   ├── config.yaml             # File cấu hình dạng YAML
-│   └── folds.json              # File định nghĩa 5-fold subject split (S1-S15)
+│   ├── config.json             # File cấu hình chính (batch_size=128, max_epoch=100, lr=1e-3, patience=10)
+│   ├── config.yaml             # File cấu hình dạng YAML (đồng bộ với config.json)
+│   ├── folds.json              # File định nghĩa 5-fold subject split (S1-S15)
+│   └── norm_stats_fold1..5.json# Thống kê Z-score tính CHỈ từ tập Train từng fold
 ├── data/
-│   ├── raw/                    # Chứa 15 file dữ liệu thô S1.pkl .. S15.pkl
-│   └── processed/              # Chứa dữ liệu đã resample & windowing (.npz)
+│   ├── raw/                    # Đường dẫn chứa S1.pkl .. S15.pkl
+│   └── processed/              # Chứa dữ liệu đã resample & windowing (.npz) theo fold
 ├── src/
-│   ├── __init__.py
-│   ├── dataset.py              # Loader & PyTorch Dataset class (C1Dataset)
-│   ├── resample.py             # Resample ACC 32Hz -> 64Hz bằng Polyphase filter
-│   ├── windowing.py            # Cắt cửa sổ T=512 (8s), stride S=256 (4s)
-│   ├── normalize.py            # Z-score normalization (Fold-wise Train statistics)
+│   ├── dataset.py              # Loader & PyTorch Dataset class (C1Dataset) & Data Inventory
+│   ├── resample.py             # Polyphase resample ACC 32Hz -> 64Hz (scipy.signal.resample_poly)
+│   ├── windowing.py            # Cắt cửa sổ T=512 (8s), stride S=256 (Train/Val) & S=512 (Test)
+│   ├── normalize.py            # Z-score normalization (Train-only statistics, ddof=0)
 │   ├── model.py                # Kiến trúc 1D-CNN Autoencoder (C1Autoencoder)
-│   ├── loss.py                 # Hàm tổn thất Reconstruction MSE Loss
-│   ├── baseline_dct.py         # Thuật toán nén DCT baseline (Top-K & equal byte)
+│   ├── loss.py                 # Reconstruction MSE Loss
+│   ├── baseline_dct.py         # Baseline DCT-II Top-K & equal byte/dim budget
 │   ├── codec.py                # Quantization & Byte Bitstream Codec (C1Codec)
-│   ├── metrics.py              # Tính CR_dim, CR_byte và ngân sách byte (B_AE = B_DCT)
+│   ├── metrics.py              # Tính CR_dim, CR_byte và ngân sách byte
 │   ├── evaluate.py             # Tính PRD, PRDN, RMSE độc lập từng kênh & valid-mask
-│   ├── results_schema.py       # Cấu trúc bảng kết quả 19 trường & join AE/DCT
+│   ├── results_schema.py       # Cấu trúc bảng kết quả & join AE/DCT
 │   ├── aggregation.py          # Aggregate theo subject & tính delta_s = AE - DCT
-│   ├── reporting.py            # Tự động xuất 5 đồ thị (PNG+CSV) và 4 bảng biểu
-│   ├── reconstruction_visualization.py # Đồ thị so sánh dạng sóng & failure cases
-│   ├── train.py                # Pipeline huấn luyện Autoencoder
-│   ├── pilot_run.py            # Pilot run (Fold 1, d_b=8, seed 42)
-│   ├── run_main_experiments.py # Chạy toàn bộ 20 main runs (5F x 4db)
-│   ├── run_seed_experiments.py # Chạy 10 seed robustness runs
-│   ├── make_report.py          # Script tổng hợp báo cáo tự động (TASK 24)
+│   ├── reporting.py            # Xuất đồ thị và bảng biểu tổng hợp
+│   ├── reconstruction_visualization.py # Đồ thị dạng sóng & failure cases
+│   ├── prepare_data.py         # End-to-end preprocessing pipeline
+│   ├── train.py                # Core training loop với early stopping
+│   ├── pilot_run.py            # Real Pilot Run (Fold 1, d_b=8, seed 42)
+│   ├── run_main_experiments.py # Launcher 20 Main Runs trên data thật
+│   ├── run_seed_experiments.py # Launcher Seed Stability (d_b=8, seeds 42, 123, 999 trên 5 folds)
+│   ├── make_report.py          # Script tự động tạo báo cáo tổng hợp
 │   └── utils.py                # Helper functions & kiểm tra phần cứng
-├── tests/                      # Suite chứa 60 Unit Tests kiểm thử tự động
-├── checkpoints/                # Lưu file weights mô hình (.pt)
-├── logs/                       # Nhật ký huấn luyện (Tensorboard & logs)
-├── results/                    # Kết quả xuất tự động (CSVs, PNGs, experiment_summary.md)
+├── tests/                      # Suite chứa unit & integration tests
+│   ├── test_real_pipeline.py   # Suite 15 integration tests trên data thật
+│   └── ...
+├── checkpoints/                # Checkpoints thật sinh từ PPG-DaLiA
+│   └── synthetic_smoke_test/   # Lưu trữ artifacts synthetic cũ để cô lập
+├── logs/                       # Logs huấn luyện thật
+│   └── synthetic_smoke_test/   # Logs synthetic cũ
+├── results/                    # Kết quả CSV/PNG chính thức
+│   ├── data_inventory.csv      # Báo cáo kiểm kê 15 subject
+│   └── synthetic_smoke_test/   # Kết quả synthetic cũ
 ├── requirements.txt            # Thư viện phụ thuộc
 └── README.md                   # Tài liệu hướng dẫn sử dụng
 ```
 
 ---
 
-## 4. TẠO ENVIRONMENT & CÀI ĐẶT (SETUP ENVIRONMENT)
-
-### Cách 1: Sử dụng `venv` (Phổ biến)
+## 5. THIẾT LẬP MÔI TRƯỜNG (ENVIRONMENT SETUP)
 
 ```bash
-# 1. Di chuyển vào thư mục dự án
+# Di chuyển vào thư mục C1_AE_DCT
 cd C1_AE_DCT
 
-# 2. Tạo môi trường ảo
-python -m venv .venv
-
-# 3. Kích hoạt môi trường ảo
-# On Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# On Linux/macOS:
-source .venv/bin/activate
-
-# 4. Nâng cấp pip & cài đặt dependencies
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### Cách 2: Sử dụng Anaconda / Miniconda
-
-```bash
-conda create -n c1_ae_dct python=3.10 -y
-conda activate c1_ae_dct
+# Cài đặt thư viện
 pip install -r requirements.txt
 ```
 
 ---
 
-## 5. CHUẨN BỊ DATASET (DATASET PREPARATION)
+## 6. QUY TRÌNH PREPROCESSING THỰC NGHIỆM (DATA PREPROCESSING PIPELINE)
 
-1. Tải 15 file `S1.pkl` đến `S15.pkl` từ nguồn PPG-DaLiA.
-2. Đặt tất cả 15 file vào thư mục:
-   `C1_AE_DCT/data/raw/`
-3. Kiểm tra sự tồn tại của file:
-   ```bash
-   python -c "from pathlib import Path; print(len(list(Path('C1_AE_DCT/data/raw').glob('*.pkl'))))"
-   # Trả về 15 là thành công.
-   ```
+Thực thi kịch bản tiền xử lý dữ liệu thật từ PPG-DaLiA:
+
+```bash
+python -m src.prepare_data
+```
+
+**Các bước thực hiện:**
+1. Đọc và kiểm định đủ 15 file `S1.pkl` .. `S15.pkl`.
+2. Chiết xuất Wrist PPG (64 Hz) và Wrist ACC (32 Hz, 3 trục).
+3. Resample ACC từ 32 Hz lên 64 Hz sử dụng `scipy.signal.resample_poly(acc, up=2, down=1, axis=0, window=("kaiser", 5.0), padtype="line")`.
+4. Căn chỉnh PPG và ACC thành ma trận tín hiệu liên tục 4 kênh $[PPG, ACCx, ACCy, ACCz]$ shape $(N, 4)$.
+5. Với mỗi fold $1 \dots 5$, tính toán thống kê Z-score (mean, std) **chỉ từ tập Train** và lưu vào `configs/norm_stats_fold{1..5}.json`.
+6. Chuẩn hóa Z-score tín hiệu liên tục từng subject theo norm stats của fold tương ứng.
+7. Cắt cửa sổ 8 giây ($T=512$ mẫu): step 4s ($S=256$) cho Train/Val, step 8s ($S=512$, không overlap) cho Test.
+8. Lưu kết quả nén dạng `.npz` vào `data/processed/fold{1..5}/{train|val|test}.npz`.
 
 ---
 
-## 6. TẠO FOLDS (SUBJECT-WISE 5-FOLD SPLIT)
+## 7. CHẠY REAL PILOT RUN (REAL DATA VERIFICATION)
 
-Khởi tạo và xác minh phân chia 5-fold theo đối tượng (mỗi fold gồm 10 Train, 2 Val, 3 Test subjects, không trùng lặp):
+Chạy Pilot Run trên dữ liệu PPG-DaLiA thật (Fold 1, $d_b=8$, Seed 42, 10 epochs):
 
 ```bash
-python src/utils.py
+python -m src.pilot_run
 ```
 
-Hoặc chạy test kiểm thử fold:
-```bash
-python -m pytest tests/test_folds.py
-```
+Save checkpoint: `checkpoints/pilot_real_fold01_db08_seed42.pt` với cờ metadata `data_type = "REAL_DATA"`.
 
 ---
 
-## 7. CHẠY PREPROCESSING (DATA PIPELINE)
+## 8. CHẠY 20 MAIN RUNS (MAIN EXPERIMENTS)
 
-Quy trình tiền xử lý tín hiệu thực thi đồng thời:
-1. **Resample:** Đưa kênh ACC từ 32Hz lên 64Hz bằng bộ lọc Polyphase chống méo tần số.
-2. **Alignment:** Căn chỉnh thời gian khớp 4 kênh $[PPG, ACCx, ACCy, ACCz]$ tại tần số 64Hz.
-3. **Windowing:** Cắt cửa sổ $T=512$ mẫu (8 giây), độ dịch $S=256$ mẫu (chồng lấp 50%).
-4. **Normalization:** Chuẩn hóa Z-score với thống kê (mean, std) tính **chỉ trên tập Train** của từng fold.
-
-Thực thi kịch bản preprocessing:
-```bash
-python src/dataset.py
-```
-
----
-
-## 8. CHẠY DCT BASELINE EXPERIMENTS
-
-Chạy thử nghiệm nén cơ sở với biến đổi cosin rời rạc (DCT):
+Khi đã được xác nhận nghiệm thu Pilot, chạy 20 thử nghiệm chính (5 Folds $\times 4 d_b \in \{16, 8, 4, 2\}$, Seed 42):
 
 ```bash
-python src/baseline_dct.py
-```
+# Chạy chính thức (100 epochs, early stopping patience=10, batch_size=128):
+python -m src.run_main_experiments
 
-Hoặc thực thi suite kiểm thử DCT:
-```bash
-python -m pytest tests/test_dct_suite.py
+# Hoặc chạy thử nhanh smoke-test 5 epoch:
+python -m src.run_main_experiments --smoke-test
 ```
 
 ---
 
-## 9. CHẠY MỘT AE EXPERIMENT (PILOT RUN)
+## 9. CHẠY SEED EXPERIMENTS (SEED STABILITY)
 
-Thực thi Pilot Run đại diện cho **Fold 1, $d_b = 8$, Seed 42** để kiểm tra bộ nhớ RAM/VRAM, tốc độ huấn luyện và hình dạng latent vector:
+Đánh giá độ ổn định mô hình trên cấu hình $d_b = 8$ với 3 seeds (42, 123, 999) trên cả 5 folds (tổng cộng 15 runs, trong đó seed 42 kế thừa từ Main Experiment):
 
 ```bash
-python src/pilot_run.py
+python -m src.run_seed_experiments
 ```
 
-**Kết quả dự kiến:**
-- Thời gian huấn luyện: ~0.46 giây / epoch.
-- Chiều Latent vector: $[B, 8, 32] \implies M = 256$ giá trị/mẫu.
-- Kích thước Checkpoint file: ~124 KB.
+*Lưu ý:* Seed stability được tổng hợp từ các chỉ số méo dạng thật theo subject trên Test set, không giả định 15 subjects $\times$ 3 seeds là 45 subjects độc lập.
 
 ---
 
-## 10. CHẠY TOÀN BỘ 20 MAIN RUNS
+## 10. ĐÁNH GIÁ CHỈ SỐ MÉO DẠNG (EVALUATION & METRICS)
 
-Chạy toàn bộ 20 thử nghiệm chính (5 Folds $\times$ 4 Mức ngân sách $d_b \in \{16, 8, 4, 2\}$):
+Đánh giá các chỉ số méo dạng trên tín hiệu vật lý đã denormalize:
 
 ```bash
-python src/run_main_experiments.py
+python -m src.evaluate
 ```
 
-*Lưu ý: Kết quả chi tiết của từng cửa sổ sẽ tự động ghi vào `results/results.csv`.*
-
----
-
-## 11. CHẠY SEED EXPERIMENTS (SEED ROBUSTNESS)
-
-Đánh giá độ ổn định của Autoencoder qua 10 seed ngẫu nhiên khác nhau trên Fold 1, $d_b = 8$:
-
+Vẽ đồ thị và tạo báo cáo tự động:
 ```bash
-python src/run_seed_experiments.py
+python -m src.make_report
 ```
 
 ---
 
-## 12. ĐÁNH GIÁ CHỈ SỐ MÉO DẠNG (EVALUATE METRICS)
+## 11. VỊ TRÍ ARTIFACTS & PHÂN LOẠI SYNTHETIC VS REAL DATA
 
-Đánh giá các chỉ số méo dạng **PRD**, **PRDN** và **RMSE** riêng cho từng kênh tín hiệu (`PPG`, `ACCx`, `ACCy`, `ACCz`) sau khi denormalize:
-
-```bash
-python src/evaluate.py
-```
-
-Chạy unit tests cho module evaluate (5 test cases của TASK 19):
-```bash
-python -m pytest tests/test_metrics_eval.py
-```
+- **Dữ liệu kiểm kê (Real Data Inventory):** `results/data_inventory.csv`
+- **Checkpoints thật:** `checkpoints/fold{F}_db{DB}_seed{S}.pt`
+- **Thư mục cô lập dữ liệu thử nghiệm synthetic cũ:**
+  - `checkpoints/synthetic_smoke_test/`
+  - `logs/synthetic_smoke_test/`
+  - `results/synthetic_smoke_test/`
 
 ---
 
-## 13. TẠO BẢNG BIỂU & ĐỒ THỊ (GENERATE PLOTS & TABLES)
+## 🧪 KIỂM THỬ TỰ ĐỘNG (INTEGRATION & UNIT TESTS)
 
-Thực thi tự động quy trình tổng hợp cấp subject, vẽ 5 đồ thị chất lượng cao và xuất 4 bảng biểu khoa học:
-
-```bash
-python src/make_report.py
-```
-
-**Các file kết quả sinh tự động trong `results/`:**
-- `summary_by_subject.csv`
-- `paired_comparison.csv`
-- `overall_summary.csv`
-- `cr_dim_prd.png` & `cr_dim_prd_data.csv`
-- `cr_byte_prd.png` & `cr_byte_prd_data.csv`
-- `prdn_curves.png` & `prdn_curves_data.csv`
-- `rmse_curves.png` & `rmse_curves_data.csv`
-- `reconstruction_examples.png`
-- `failure_cases.png` & `failure_cases.csv`
-- `experiment_summary.md`
-
----
-
-## 14. VỊ TRÍ CHECKPOINT / LOG / RESULT (OUTPUTS DIRECTORY)
-
-- **Checkpoints mô hình:** `checkpoints/`
-  - `pilot_model_fold1_db8.pt`
-  - `model_fold{F}_db{DB}.pt`
-- **Nhật ký huấn luyện:** `logs/`
-  - Nhật ký văn bản và file Tensorboard.
-- **Báo cáo & Đồ thị xuất ra:** `results/`
-  - Chứa toàn bộ các file CSVs, PNGs và file markdown `experiment_summary.md`.
-
----
-
-## 15. CẤU HÌNH PHẦN CỨNG / PHẦN MỀM (SYSTEM SPECS)
-
-Thông số môi trường được thử nghiệm và nghiệm thu:
-
-| Thông số | Chi tiết cấu hình |
-| :--- | :--- |
-| **Hệ điều hành** | Windows 11 Home/Pro 64-bit |
-| **Bộ xử lý (CPU)** | AMD Ryzen Series (AMD64 Architecture) |
-| **Bộ nhớ RAM** | 16 GB System Memory |
-| **Card đồ họa (GPU)** | NVIDIA GeForce RTX 3060 Laptop GPU (6 GB VRAM) |
-| **Python** | Python `3.14.5` (hoặc Python `3.10+`) |
-| **Thư viện chính** | PyTorch `2.x`, NumPy `2.x`, SciPy `1.x`, Matplotlib `3.x`, PyTest `9.x` |
-
----
-
-## 16. NHỮNG EXPERIMENT CHƯA HOÀN THÀNH / HƯỚNG PHÁT TRIỂN (ROADMAP)
-
-- **Tình trạng thử nghiệm hiện tại:**
-  - Tất cả các module core, preprocessing, DCT baseline, Autoencoder architecture, loss, metrics, evaluate, results schema, aggregation, reporting và 60 unit tests đã hoàn thành 100%.
-- **Hướng phát triển tiếp theo:**
-  - Tích hợp thêm module lượng hóa số nguyên Bit-level Entropy Coding (HUFFMAN / ANS) để so sánh chỉ số $CR_{\text{bit}}$ thực tế truyền qua sóng vô tuyến LoRaWAN / BLE.
-  - Mở rộng thử nghiệm trên các tập dữ liệu bổ sung (IEEE SPC, WESAD).
-
----
-
-## 🧪 KIỂM THỬ TOÀN BỘ SUITE (RUNNING ALL UNIT TESTS)
-
-Để xác minh toàn bộ hệ thống dự án hoạt động chính xác từ đầu đến cuối, chạy lệnh:
+Chạy toàn bộ unit test và integration test suite:
 
 ```bash
 python -m pytest tests/
 ```
-
-**Kỳ vọng:** `60 passed in ~12.5s` (100% Passed).

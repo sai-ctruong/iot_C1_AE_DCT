@@ -21,10 +21,14 @@ htmlcov/
 *.swp
 *.swo
 
-# Large raw datasets (track folder structure with .gitkeep)
+# Large raw datasets & processed binary files
 C1_AE_DCT/data/raw/*.pkl
-C1_AE_DCT/data/processed/*.npz
+C1_AE_DCT/data/processed/**/*.npz
+ppg+dalia/
+*.pkl
+*.npz
 
 # OS metadata
 .DS_Store
 Thumbs.db
+

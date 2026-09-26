@@ -98,8 +98,14 @@ def normalize(
 
     # Check dimension matching
     if arr.ndim == 2:
-        # Shape: (N, C)
-        data_norm = (arr - means) / stds
+        if arr.shape[1] == len(means):
+            # Shape: (N, C)
+            data_norm = (arr - means) / stds
+        elif arr.shape[0] == len(means):
+            # Shape: (C, N)
+            data_norm = (arr - means[:, np.newaxis]) / stds[:, np.newaxis]
+        else:
+            raise ValueError(f"Array shape {arr.shape} does not match channel count {len(means)}")
     elif arr.ndim == 3:
         if arr.shape[-1] == len(means):
             # Shape: (B, T, C)
@@ -127,7 +133,7 @@ def denormalize(
     Parameters:
     -----------
     data_norm : np.ndarray
-        Z-score normalized signal array of shape (N, C), (B, T, C), or (B, C, T).
+        Z-score normalized signal array of shape (N, C), (C, N), (B, T, C), or (B, C, T).
     stats : Dict[str, Any]
         Dictionary containing "mean" and "std" arrays/lists.
 
@@ -144,8 +150,14 @@ def denormalize(
     stds = np.array(stats["std"], dtype=np.float32)
 
     if arr.ndim == 2:
-        # Shape: (N, C)
-        data_rec = arr * stds + means
+        if arr.shape[1] == len(means):
+            # Shape: (N, C)
+            data_rec = arr * stds + means
+        elif arr.shape[0] == len(means):
+            # Shape: (C, N)
+            data_rec = arr * stds[:, np.newaxis] + means[:, np.newaxis]
+        else:
+            raise ValueError(f"Array shape {arr.shape} does not match channel count {len(means)}")
     elif arr.ndim == 3:
         if arr.shape[-1] == len(means):
             # Shape: (B, T, C)
@@ -161,6 +173,7 @@ def denormalize(
         raise ValueError(f"Unsupported data shape {arr.shape} for channel count {len(means)}")
 
     return data_rec.astype(np.float32)
+
 
 
 def save_norm_stats(stats: Dict[str, Any], file_path: Union[str, Path]) -> Path:

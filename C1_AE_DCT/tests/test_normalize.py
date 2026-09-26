@@ -77,19 +77,19 @@ def test_zero_std_error():
     print("[TEST] Zero std error exception raised correctly!")
 
 
-def test_save_load_norm_stats_folds():
-    """Test saving and loading norm_stats_fold1.json through norm_stats_fold5.json."""
+def test_save_load_norm_stats_folds(tmp_path):
+    """Test saving and loading norm_stats_fold1.json through norm_stats_fold5.json in isolated test temp directory."""
     import numpy as np
     from src.normalize import compute_norm_stats, save_norm_stats, load_norm_stats
 
-    configs_dir = PROJECT_ROOT / "configs"
-    configs_dir.mkdir(exist_ok=True)
+    test_configs_dir = tmp_path / "test_configs"
+    test_configs_dir.mkdir(exist_ok=True)
 
     for fold_idx in range(1, 6):
         dummy_train = np.random.randn(200, 4).astype(np.float32) * fold_idx + (fold_idx * 10)
         stats = compute_norm_stats(dummy_train, ddof=0)
 
-        filepath = configs_dir / f"norm_stats_fold{fold_idx}.json"
+        filepath = test_configs_dir / f"norm_stats_fold{fold_idx}.json"
         save_norm_stats(stats, filepath)
         assert filepath.exists(), f"File {filepath} was not created"
 
@@ -98,13 +98,17 @@ def test_save_load_norm_stats_folds():
         assert len(loaded_stats["mean"]) == 4
         assert len(loaded_stats["std"]) == 4
 
-    print("[SUCCESS] Fold 1-5 norm_stats JSON serialization and loading verified!")
+    print("[SUCCESS] Fold 1-5 norm_stats JSON serialization and loading verified in isolated temp dir!")
+
 
 
 if __name__ == "__main__":
+    import tempfile
     print("=== TASK 4 - Z-SCORE TRAIN-ONLY NORMALIZATION VERIFICATION ===")
     test_zscore_normalize_denormalize_reconstruction()
     test_val_test_uses_train_stats()
     test_zero_std_error()
-    test_save_load_norm_stats_folds()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_save_load_norm_stats_folds(Path(tmpdir))
     print("=== ALL NORMALIZATION TESTS PASSED CLEANLY ===")
+

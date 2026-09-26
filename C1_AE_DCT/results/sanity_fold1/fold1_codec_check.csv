@@ -1,0 +1,10 @@
+method,db,K,pad_bytes,nbytes,expected_bytes,codec_pass
+DCT_equal_dim,16,512,0,3088,3088,True
+DCT_equal_byte,16,341,2,2064,2064,True
+DCT_equal_dim,8,256,0,1552,1552,True
+DCT_equal_byte,8,170,4,1040,1040,True
+DCT_equal_dim,4,128,0,784,784,True
+DCT_equal_byte,4,85,2,528,528,True
+DCT_equal_dim,2,64,0,400,400,True
+DCT_equal_byte,2,42,4,272,272,True
+AE,8,0,0,1040,1040,True

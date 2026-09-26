@@ -1,0 +1,4 @@
+seed,d_b,folds_evaluated,mean_metric_across_subjects,std_across_subjects
+42,8,5,0.998398,0.001802
+123,8,5,0.995776,0.001035
+999,8,5,0.997537,0.002001
