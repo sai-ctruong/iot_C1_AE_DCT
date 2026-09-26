@@ -1,0 +1,30 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE & Editor settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Large raw datasets (track folder structure with .gitkeep)
+C1_AE_DCT/data/raw/*.pkl
+C1_AE_DCT/data/processed/*.npz
+
+# OS metadata
+.DS_Store
+Thumbs.db

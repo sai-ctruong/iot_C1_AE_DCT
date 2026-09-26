@@ -1,0 +1,14 @@
+# Core Frameworks & Math
+torch>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Configuration & Utilities
+pyyaml>=6.0
+psutil>=5.9.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Testing
+pytest>=7.0.0

@@ -1,0 +1,30 @@
+{
+  "project": {
+    "name": "C1_AE_DCT",
+    "version": "0.1.0",
+    "description": "Autoencoder & Discrete Cosine Transform (DCT) Baseline for Signal/Image Processing & IoT"
+  },
+  "data": {
+    "raw_dir": "data/raw",
+    "processed_dir": "data/processed",
+    "batch_size": 32,
+    "num_workers": 2
+  },
+  "model": {
+    "name": "c1_ae_dct_model",
+    "input_dim": 64,
+    "latent_dim": 16,
+    "use_dct_baseline": true
+  },
+  "training": {
+    "epochs": 50,
+    "learning_rate": 0.001,
+    "device": "cuda",
+    "seed": 42
+  },
+  "paths": {
+    "checkpoints_dir": "checkpoints",
+    "logs_dir": "logs",
+    "results_dir": "results"
+  }
+}

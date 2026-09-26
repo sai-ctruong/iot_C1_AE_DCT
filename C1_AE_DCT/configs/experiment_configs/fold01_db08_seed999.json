@@ -1,0 +1,15 @@
+{
+  "experiment_name": "fold01_db08_seed999",
+  "fold": 1,
+  "d_b": 8,
+  "seed": 999,
+  "batch_size": 128,
+  "max_epoch": 5,
+  "early_stopping_patience": 3,
+  "lr": 0.001,
+  "norm_stats_file": "D:\\UTE\\AIForIOT\\project_Cuoiki_iot\\C1_AE_DCT\\configs\\norm_stats_fold1.json",
+  "val_subjects": [
+    "S4",
+    "S5"
+  ]
+}

@@ -1,0 +1,16 @@
+fold,db,seed,status,best_epoch,best_val_loss,time_sec,checkpoint_path
+1,8,42,COMPLETED,5,0.997587,1.23,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold01_db08_seed42.pt
+2,8,42,COMPLETED,5,0.999197,1.27,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold02_db08_seed42.pt
+3,8,42,COMPLETED,5,0.999442,1.19,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold03_db08_seed42.pt
+4,8,42,COMPLETED,5,1.000464,1.26,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold04_db08_seed42.pt
+5,8,42,COMPLETED,5,0.995302,1.52,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold05_db08_seed42.pt
+1,8,123,COMPLETED,5,0.995903,2.52,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold01_db08_seed123.pt
+2,8,123,COMPLETED,5,0.997458,1.38,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold02_db08_seed123.pt
+3,8,123,COMPLETED,5,0.994362,1.20,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold03_db08_seed123.pt
+4,8,123,COMPLETED,5,0.995111,1.23,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold04_db08_seed123.pt
+5,8,123,COMPLETED,5,0.996045,1.48,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold05_db08_seed123.pt
+1,8,999,COMPLETED,5,0.995419,1.35,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold01_db08_seed999.pt
+2,8,999,COMPLETED,5,0.998895,1.33,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold02_db08_seed999.pt
+3,8,999,COMPLETED,5,0.997357,1.47,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold03_db08_seed999.pt
+4,8,999,COMPLETED,5,0.995437,1.20,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold04_db08_seed999.pt
+5,8,999,COMPLETED,5,1.000579,1.29,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold05_db08_seed999.pt
