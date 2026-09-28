@@ -1,0 +1,7 @@
+fold,db,seed,status,best_epoch,best_val_loss,time_sec,checkpoint_path,dataset,data_type
+1,8,42,COMPLETED,82,0.055082,460.55,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold01_db08_seed42.pt,PPG-DaLiA,real
+2,8,42,COMPLETED,42,0.038095,182.03,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold02_db08_seed42.pt,PPG-DaLiA,real
+3,8,42,COMPLETED,95,0.045317,340.55,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold03_db08_seed42.pt,PPG-DaLiA,real
+4,8,42,COMPLETED,93,0.047924,312.25,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold04_db08_seed42.pt,PPG-DaLiA,real
+5,8,42,COMPLETED,54,0.046656,210.68,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold05_db08_seed42.pt,PPG-DaLiA,real
+1,8,123,COMPLETED,85,0.054360,490.02,D:\UTE\AIForIOT\project_Cuoiki_iot\C1_AE_DCT\checkpoints\fold01_db08_seed123.pt,PPG-DaLiA,real
