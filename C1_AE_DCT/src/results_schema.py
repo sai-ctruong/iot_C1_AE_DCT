@@ -12,14 +12,18 @@ try:
 except ImportError:
     pd = None
 
-# 19 mandatory columns defined in TASK 20 specification
+# Mandatory columns defined in TASK 20, TASK 2 & TASK 3 specification
 RESULT_SCHEMA_COLUMNS = [
     "fold",
     "subject",
     "seed",
+    "dataset",
     "method",
+    "comparison_type",
     "db",
+    "M",
     "K",
+    "representation_count",
     "channel",
     "window_id",
     "start_index",
@@ -30,6 +34,8 @@ RESULT_SCHEMA_COLUMNS = [
     "PRD",
     "PRDN",
     "RMSE",
+    "valid_prd",
+    "valid_prdn",
     "metric_valid",
     "checkpoint",
     "config_id",
@@ -38,7 +44,7 @@ RESULT_SCHEMA_COLUMNS = [
 # Optional/Alias columns for explicit joining
 ALL_SCHEMA_COLUMNS = RESULT_SCHEMA_COLUMNS + ["budget"]
 
-JOIN_KEYS = ["fold", "subject", "window_id", "channel", "budget"]
+JOIN_KEYS = ["fold", "subject", "window_id", "channel", "budget", "comparison_type"]
 
 
 def create_empty_results_df() -> Any:
@@ -68,22 +74,40 @@ def create_result_row(
     metric_valid: bool,
     checkpoint: str,
     config_id: str,
+    dataset: str = "PPG-DaLiA",
+    comparison_type: str = "equal_byte",
+    valid_prd: Optional[bool] = None,
+    valid_prdn: Optional[bool] = None,
+    M: Optional[int] = None,
+    representation_count: Optional[int] = None,
     budget: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Construct a single validated result dictionary following TASK 20 schema.
+    Construct a single validated result dictionary following TASK 20, TASK 2 & TASK 3 schema.
     """
     if budget is None:
         budget = db
+    if M is None:
+        M = 32 * db
+    if representation_count is None:
+        representation_count = M if method == "AE" else K
+    if valid_prd is None:
+        valid_prd = bool(metric_valid) and not np.isnan(PRD) if PRD is not None else False
+    if valid_prdn is None:
+        valid_prdn = bool(metric_valid) and not np.isnan(PRDN) if PRDN is not None else False
 
     row = {
         "fold": int(fold),
         "subject": str(subject),
         "seed": int(seed),
+        "dataset": str(dataset),
         "method": str(method),
+        "comparison_type": str(comparison_type),
         "db": int(db),
         "budget": int(budget),
+        "M": int(M),
         "K": int(K),
+        "representation_count": int(representation_count),
         "channel": str(channel),
         "window_id": str(window_id),
         "start_index": int(start_index),
@@ -94,6 +118,8 @@ def create_result_row(
         "PRD": float(PRD) if PRD is not None else float("nan"),
         "PRDN": float(PRDN) if PRDN is not None else float("nan"),
         "RMSE": float(RMSE) if RMSE is not None else float("nan"),
+        "valid_prd": bool(valid_prd),
+        "valid_prdn": bool(valid_prdn),
         "metric_valid": bool(metric_valid),
         "checkpoint": str(checkpoint),
         "config_id": str(config_id),
@@ -194,13 +220,16 @@ def join_ae_dct_results(
     validate_results_schema(results_dct)
 
     if join_on is None:
-        # Check if 'budget' exists in both, else use 'db'
+        # Check if 'comparison_type' and 'budget' exist in both, else fallback to db
         sample_ae = results_ae[0] if isinstance(results_ae, list) else results_ae.iloc[0].to_dict()
         sample_dct = results_dct[0] if isinstance(results_dct, list) else results_dct.iloc[0].to_dict()
+        join_on = ["fold", "subject", "window_id", "channel"]
         if "budget" in sample_ae and "budget" in sample_dct:
-            join_on = ["fold", "subject", "window_id", "channel", "budget"]
+            join_on.append("budget")
         else:
-            join_on = ["fold", "subject", "window_id", "channel", "db"]
+            join_on.append("db")
+        if "comparison_type" in sample_ae and "comparison_type" in sample_dct:
+            join_on.append("comparison_type")
 
     if pd is not None and isinstance(results_ae, pd.DataFrame) and isinstance(results_dct, pd.DataFrame):
         merged = pd.merge(

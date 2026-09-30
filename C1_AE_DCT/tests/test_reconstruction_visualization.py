@@ -38,7 +38,7 @@ def generate_synthetic_task23_results():
                     row = create_result_row(
                         fold=1, subject="S1", seed=42, method=method, db=db, K=32*db,
                         channel=ch, window_id=f"win_{w:04d}", start_index=w*512, nbytes=1040,
-                        CR_dim=512.0/(32*db), CR_byte_64=7.87, CR_byte_native=4.92,
+                        CR_dim=2048.0/(32*db), CR_byte_64=7.87, CR_byte_native=4.92,
                         PRD=prd, PRDN=prd*2.0, RMSE=0.1, metric_valid=True,
                         checkpoint="ckpt.pt", config_id=f"{method}_db{db}"
                     )

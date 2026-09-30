@@ -34,3 +34,4 @@ logs/
 
 # Keep results
 !results/
+results/results.csv

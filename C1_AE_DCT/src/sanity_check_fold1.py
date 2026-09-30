@@ -122,9 +122,8 @@ def run_sanity_check_fold1() -> Dict[str, Any]:
         k_eq_dim = b_info["K_equal_dim"]
         k_eq_byte = b_info["K_equal_byte"]
         pad_bytes_byte = b_info["padding"]
-        cr_dim_val = 2048.0 / float(m_dim)
-
         for b_type, k_val, pad_val in [("equal_dim", k_eq_dim, 0), ("equal_byte", k_eq_byte, pad_bytes_byte)]:
+            cr_dim_dct = 2048.0 / float(k_val)
             print(f"Evaluating DCT {b_type:<10} (d_b={d_b:02d}, K={k_val}, pad={pad_val} bytes)...")
 
             for w_idx in range(total_test_windows):
@@ -167,7 +166,7 @@ def run_sanity_check_fold1() -> Dict[str, Any]:
                         window_id=w_meta["window_id"],
                         start_index=w_meta["start_index"],
                         nbytes=nbytes,
-                        CR_dim=cr_dim_val,
+                        CR_dim=cr_dim_dct,
                         CR_byte_64=8192.0 / float(nbytes),
                         CR_byte_native=5120.0 / float(nbytes),
                         PRD=ch_metrics["prd"],

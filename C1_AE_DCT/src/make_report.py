@@ -206,7 +206,9 @@ def generate_synthetic_full_results(output_path: Union[str, Path]) -> Path:
         for subj in subjs:
             for db in [16, 8, 4, 2]:
                 nbytes = 16 + 4 * (32 * db)
-                cr_dim = 512.0 / (32 * db)
+                cr_dim_ae = 2048.0 / (32 * db)
+                k_dct = (4 * 32 * db) // 6
+                cr_dim_dct = 2048.0 / float(k_dct)
                 cr_b64 = 8192.0 / float(nbytes)
                 cr_bnative = 5120.0 / float(nbytes)
 
@@ -228,7 +230,7 @@ def generate_synthetic_full_results(output_path: Union[str, Path]) -> Path:
                         r_ae = create_result_row(
                             fold=fold, subject=subj, seed=42, method="AE", db=db, K=32*db,
                             channel=ch, window_id=w_id, start_index=w*512, nbytes=nbytes,
-                            CR_dim=cr_dim, CR_byte_64=cr_b64, CR_byte_native=cr_bnative,
+                            CR_dim=cr_dim_ae, CR_byte_64=cr_b64, CR_byte_native=cr_bnative,
                             PRD=ae_prd, PRDN=ae_prdn, RMSE=ae_rmse, metric_valid=True,
                             checkpoint=f"checkpoints/ae_f{fold}_db{db}.pt", config_id=f"AE_f{fold}_db{db}"
                         )
@@ -237,9 +239,9 @@ def generate_synthetic_full_results(output_path: Union[str, Path]) -> Path:
 
                         # DCT row
                         r_dct = create_result_row(
-                            fold=fold, subject=subj, seed=42, method="DCT", db=db, K=(4*32*db)//6,
+                            fold=fold, subject=subj, seed=42, method="DCT", db=db, K=k_dct,
                             channel=ch, window_id=w_id, start_index=w*512, nbytes=nbytes,
-                            CR_dim=cr_dim, CR_byte_64=cr_b64, CR_byte_native=cr_bnative,
+                            CR_dim=cr_dim_dct, CR_byte_64=cr_b64, CR_byte_native=cr_bnative,
                             PRD=dct_prd, PRDN=dct_prdn, RMSE=dct_rmse, metric_valid=True,
                             checkpoint="N/A", config_id=f"DCT_db{db}"
                         )

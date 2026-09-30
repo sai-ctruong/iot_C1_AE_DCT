@@ -83,16 +83,27 @@ def evaluate_all_test_folds(
             model.eval()
 
             m_dim = 32 * d_b
-            cr_dim_val = 512.0 / float(m_dim)
+            cr_dim_ae = 2048.0 / float(m_dim)
+
+            # Pre-compute DCT equal-dim & equal-byte parameters
+            k_eq_dim = m_dim
+            cr_dim_dct_dim = 2048.0 / float(k_eq_dim)
+
+            b_info = compute_equal_byte_budget(d_b)
+            k_eq_byte = b_info["K_equal_byte"]
+            pad_byte_val = b_info["padding"]
+            cr_dim_dct_byte = 2048.0 / float(k_eq_byte)
 
             with torch.no_grad():
                 for w_idx in range(num_windows):
                     w_norm = test_windows_norm[w_idx]  # Shape (4, 512)
                     w_meta = test_meta_list[w_idx]
 
+                    # --------------------------------------------------------
+                    # A. AE EVALUATION & DUAL LOGGING (equal_dim & equal_byte)
+                    # --------------------------------------------------------
                     x_in = torch.from_numpy(w_norm).unsqueeze(0).float().to(device)
 
-                    # Encode -> Codec Serialize -> Codec Deserialize -> Decode
                     latent_tensor = model.encode(x_in)
                     latent_np = latent_tensor.cpu().numpy()
 
@@ -109,89 +120,94 @@ def evaluate_all_test_folds(
                     ref_phys = denormalize(w_norm, norm_stats)
                     rec_phys_ae = denormalize(rec_norm_ae, norm_stats)
 
-                    # Calculate per-channel metrics
                     for c_idx, ch_name in enumerate(CHANNEL_NAMES):
                         ch_m_ae = compute_channel_metrics(ref_phys[c_idx], rec_phys_ae[c_idx], channel_name=ch_name)
 
-                        r_ae = create_result_row(
-                            fold=fold,
-                            subject=w_meta["subject"],
-                            seed=42,
-                            method="AE",
-                            db=d_b,
-                            K=0,
-                            channel=ch_name,
-                            window_id=w_meta["window_id"],
-                            start_index=w_meta["start_index"],
-                            nbytes=nbytes_ae,
-                            CR_dim=cr_dim_val,
-                            CR_byte_64=8192.0 / float(nbytes_ae),
-                            CR_byte_native=5120.0 / float(nbytes_ae),
-                            PRD=ch_m_ae["prd"],
-                            PRDN=ch_m_ae["prdn"],
-                            RMSE=ch_m_ae["rmse"],
-                            metric_valid=ch_m_ae["valid_prdn"],
-                            checkpoint=ckpt_path.name,
-                            config_id=f"ae_f{fold}_db{d_b}_seed42",
-                            budget=d_b
+                        # Log AE row for comparison_type="equal_dim"
+                        r_ae_dim = create_result_row(
+                            fold=fold, subject=w_meta["subject"], seed=42, dataset="PPG-DaLiA", method="AE",
+                            comparison_type="equal_dim", db=d_b, M=m_dim, K=0, representation_count=m_dim,
+                            channel=ch_name, window_id=w_meta["window_id"], start_index=w_meta["start_index"],
+                            nbytes=nbytes_ae, CR_dim=cr_dim_ae, CR_byte_64=8192.0 / float(nbytes_ae),
+                            CR_byte_native=5120.0 / float(nbytes_ae), PRD=ch_m_ae["prd"], PRDN=ch_m_ae["prdn"],
+                            RMSE=ch_m_ae["rmse"], valid_prd=ch_m_ae["valid_prd"], valid_prdn=ch_m_ae["valid_prdn"],
+                            metric_valid=ch_m_ae["valid_prdn"], checkpoint=ckpt_path.name,
+                            config_id=f"ae_f{fold}_db{d_b}_seed42", budget=d_b
                         )
-                        results_list.append(r_ae)
+                        results_list.append(r_ae_dim)
 
-            # ----------------------------------------------------------------
-            # 2. DCT BASELINE EVALUATION (Equal Byte Budget)
-            # ----------------------------------------------------------------
-            b_info = compute_equal_byte_budget(d_b)
-            k_eq_byte = b_info["K_equal_byte"]
-            pad_val = b_info["padding"]
+                        # Log AE row for comparison_type="equal_byte"
+                        r_ae_byte = create_result_row(
+                            fold=fold, subject=w_meta["subject"], seed=42, dataset="PPG-DaLiA", method="AE",
+                            comparison_type="equal_byte", db=d_b, M=m_dim, K=0, representation_count=m_dim,
+                            channel=ch_name, window_id=w_meta["window_id"], start_index=w_meta["start_index"],
+                            nbytes=nbytes_ae, CR_dim=cr_dim_ae, CR_byte_64=8192.0 / float(nbytes_ae),
+                            CR_byte_native=5120.0 / float(nbytes_ae), PRD=ch_m_ae["prd"], PRDN=ch_m_ae["prdn"],
+                            RMSE=ch_m_ae["rmse"], valid_prd=ch_m_ae["valid_prd"], valid_prdn=ch_m_ae["valid_prdn"],
+                            metric_valid=ch_m_ae["valid_prdn"], checkpoint=ckpt_path.name,
+                            config_id=f"ae_f{fold}_db{d_b}_seed42", budget=d_b
+                        )
+                        results_list.append(r_ae_byte)
 
-            for w_idx in range(num_windows):
-                w_norm = test_windows_norm[w_idx]
-                w_meta = test_meta_list[w_idx]
+                    # --------------------------------------------------------
+                    # B. DCT EQUAL-DIMENSION BASELINE (comparison_type="equal_dim", K=M)
+                    # --------------------------------------------------------
+                    topk_vals_dim, topk_idxs_dim, _, _ = dct_encode_topk(w_norm, k=k_eq_dim)
+                    dct_bytes_dim = encode_dct_bytes(topk_vals_dim, topk_idxs_dim, d_b=d_b, profile_id=0, pad_bytes=0)
+                    nbytes_dct_dim = len(dct_bytes_dim)
 
-                # DCT Top-K Encode -> Codec Serialize -> Codec Deserialize -> IDCT Decode
-                topk_vals, topk_idxs, _, _ = dct_encode_topk(w_norm, k=k_eq_byte)
-                dct_bytes = encode_dct_bytes(topk_vals, topk_idxs, d_b=d_b, profile_id=0, pad_bytes=pad_val)
-                nbytes_dct = len(dct_bytes)
+                    dec_vals_dim, dec_idxs_dim, _ = decode_dct_bytes(dct_bytes_dim)
+                    sparse_dct_dec_dim = np.zeros((4, 512), dtype=np.float32)
+                    np.put(sparse_dct_dec_dim, dec_idxs_dim, dec_vals_dim)
 
-                dec_vals, dec_idxs, _ = decode_dct_bytes(dct_bytes)
-                sparse_dct_dec = np.zeros((4, 512), dtype=np.float32)
-                np.put(sparse_dct_dec, dec_idxs, dec_vals)
+                    rec_norm_dct_dim = dct_decode(sparse_dct_dec_dim)
+                    rec_phys_dct_dim = denormalize(rec_norm_dct_dim, norm_stats)
 
-                rec_norm_dct = dct_decode(sparse_dct_dec)
+                    for c_idx, ch_name in enumerate(CHANNEL_NAMES):
+                        ch_m_dct_dim = compute_channel_metrics(ref_phys[c_idx], rec_phys_dct_dim[c_idx], channel_name=ch_name)
 
-                # Denormalize to physical domain
-                ref_phys = denormalize(w_norm, norm_stats)
-                rec_phys_dct = denormalize(rec_norm_dct, norm_stats)
+                        r_dct_dim = create_result_row(
+                            fold=fold, subject=w_meta["subject"], seed=42, dataset="PPG-DaLiA", method="DCT",
+                            comparison_type="equal_dim", db=d_b, M=m_dim, K=k_eq_dim, representation_count=k_eq_dim,
+                            channel=ch_name, window_id=w_meta["window_id"], start_index=w_meta["start_index"],
+                            nbytes=nbytes_dct_dim, CR_dim=cr_dim_dct_dim, CR_byte_64=8192.0 / float(nbytes_dct_dim),
+                            CR_byte_native=5120.0 / float(nbytes_dct_dim), PRD=ch_m_dct_dim["prd"],
+                            PRDN=ch_m_dct_dim["prdn"], RMSE=ch_m_dct_dim["rmse"], valid_prd=ch_m_dct_dim["valid_prd"],
+                            valid_prdn=ch_m_dct_dim["valid_prdn"], metric_valid=ch_m_dct_dim["valid_prdn"],
+                            checkpoint="N/A", config_id=f"dct_eqdim_db{d_b}_k{k_eq_dim}", budget=d_b
+                        )
+                        results_list.append(r_dct_dim)
 
-                # Calculate per-channel metrics
-                for c_idx, ch_name in enumerate(CHANNEL_NAMES):
-                    ch_m_dct = compute_channel_metrics(ref_phys[c_idx], rec_phys_dct[c_idx], channel_name=ch_name)
+                    # --------------------------------------------------------
+                    # C. DCT EQUAL-BYTE BASELINE (comparison_type="equal_byte", K=floor(4M/6))
+                    # --------------------------------------------------------
+                    topk_vals_byte, topk_idxs_byte, _, _ = dct_encode_topk(w_norm, k=k_eq_byte)
+                    dct_bytes_byte = encode_dct_bytes(topk_vals_byte, topk_idxs_byte, d_b=d_b, profile_id=0, pad_bytes=pad_byte_val)
+                    nbytes_dct_byte = len(dct_bytes_byte)
 
-                    r_dct = create_result_row(
-                        fold=fold,
-                        subject=w_meta["subject"],
-                        seed=42,
-                        method="DCT",
-                        db=d_b,
-                        K=k_eq_byte,
-                        channel=ch_name,
-                        window_id=w_meta["window_id"],
-                        start_index=w_meta["start_index"],
-                        nbytes=nbytes_dct,
-                        CR_dim=cr_dim_val,
-                        CR_byte_64=8192.0 / float(nbytes_dct),
-                        CR_byte_native=5120.0 / float(nbytes_dct),
-                        PRD=ch_m_dct["prd"],
-                        PRDN=ch_m_dct["prdn"],
-                        RMSE=ch_m_dct["rmse"],
-                        metric_valid=ch_m_dct["valid_prdn"],
-                        checkpoint="N/A",
-                        config_id=f"dct_db{d_b}_k{k_eq_byte}",
-                        budget=d_b
-                    )
-                    results_list.append(r_dct)
+                    dec_vals_byte, dec_idxs_byte, _ = decode_dct_bytes(dct_bytes_byte)
+                    sparse_dct_dec_byte = np.zeros((4, 512), dtype=np.float32)
+                    np.put(sparse_dct_dec_byte, dec_idxs_byte, dec_vals_byte)
 
-            print(f"  [Fold {fold} d_b={d_b:02d}] Evaluated {num_windows} windows -> AE & DCT records logged.")
+                    rec_norm_dct_byte = dct_decode(sparse_dct_dec_byte)
+                    rec_phys_dct_byte = denormalize(rec_norm_dct_byte, norm_stats)
+
+                    for c_idx, ch_name in enumerate(CHANNEL_NAMES):
+                        ch_m_dct_byte = compute_channel_metrics(ref_phys[c_idx], rec_phys_dct_byte[c_idx], channel_name=ch_name)
+
+                        r_dct_byte = create_result_row(
+                            fold=fold, subject=w_meta["subject"], seed=42, dataset="PPG-DaLiA", method="DCT",
+                            comparison_type="equal_byte", db=d_b, M=m_dim, K=k_eq_byte, representation_count=k_eq_byte,
+                            channel=ch_name, window_id=w_meta["window_id"], start_index=w_meta["start_index"],
+                            nbytes=nbytes_dct_byte, CR_dim=cr_dim_dct_byte, CR_byte_64=8192.0 / float(nbytes_dct_byte),
+                            CR_byte_native=5120.0 / float(nbytes_dct_byte), PRD=ch_m_dct_byte["prd"],
+                            PRDN=ch_m_dct_byte["prdn"], RMSE=ch_m_dct_byte["rmse"], valid_prd=ch_m_dct_byte["valid_prd"],
+                            valid_prdn=ch_m_dct_byte["valid_prdn"], metric_valid=ch_m_dct_byte["valid_prdn"],
+                            checkpoint="N/A", config_id=f"dct_eqbyte_db{d_b}_k{k_eq_byte}", budget=d_b
+                        )
+                        results_list.append(r_dct_byte)
+
+            print(f"  [Fold {fold} d_b={d_b:02d}] Evaluated {num_windows} windows -> AE & DCT (equal_dim & equal_byte) records logged.")
 
     # ----------------------------------------------------------------
     # 3. VALIDATE SCHEMA & SAVE TO CSV

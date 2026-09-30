@@ -83,7 +83,7 @@ def test_full_plots_and_tables_generation(tmp_path):
                         row = create_result_row(
                             fold=1, subject=subj, seed=42, method=method, db=db, K=32*db,
                             channel=ch, window_id=f"win_{w:04d}", start_index=w*512, nbytes=16 + 4*32*db,
-                            CR_dim=512.0/(32*db), CR_byte_64=8192.0/(16 + 4*32*db), CR_byte_native=5120.0/(16 + 4*32*db),
+                            CR_dim=2048.0/(32*db), CR_byte_64=8192.0/(16 + 4*32*db), CR_byte_native=5120.0/(16 + 4*32*db),
                             PRD=prd, PRDN=prdn, RMSE=rmse, metric_valid=True,
                             checkpoint="ckpt.pt", config_id=f"{method}_db{db}"
                         )

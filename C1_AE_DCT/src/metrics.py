@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Tuple, Union
 import numpy as np
 
 RAW_SAMPLES_PER_WINDOW = 4 * 512  # 2048 raw values
+RAW_64HZ_VALUES = 4 * 512        # 2048 raw values (4 channels x 512 samples)
 RAW_BYTES_64HZ = 4 * 512 * 4       # 8192 bytes (float32 at 64Hz)
 RAW_BYTES_NATIVE = (512 + 256 * 3) * 4  # 5120 bytes (PPG 64Hz + ACC 32Hz float32)
 

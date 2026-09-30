@@ -40,15 +40,17 @@ def aggregate_by_subject(
         df = pd.DataFrame(records) if pd is not None else records
 
     if pd is not None and isinstance(df, pd.DataFrame):
-        # Ensure budget column exists
+        # Ensure budget & comparison_type columns exist
         if "budget" not in df.columns:
             df["budget"] = df["db"]
+        if "comparison_type" not in df.columns:
+            df["comparison_type"] = "equal_byte"
 
-        group_cols = ["subject", "method", "db", "budget", "channel"]
+        group_cols = ["subject", "method", "comparison_type", "db", "budget", "channel"]
         summary_rows = []
 
         for keys, group in df.groupby(group_cols):
-            subj, method, db, budget, ch = keys
+            subj, method, comp_type, db, budget, ch = keys
             n_total = len(group)
 
             # Valid PRD subset
@@ -77,6 +79,7 @@ def aggregate_by_subject(
             row = {
                 "subject": subj,
                 "method": method,
+                "comparison_type": comp_type,
                 "db": db,
                 "budget": budget,
                 "channel": ch,
@@ -108,13 +111,14 @@ def aggregate_by_subject(
         for row in df:
             db_val = int(row["db"])
             budget_val = int(row.get("budget", db_val))
-            k = (str(row["subject"]), str(row["method"]), db_val, budget_val, str(row["channel"]))
+            comp_type = str(row.get("comparison_type", "equal_byte"))
+            k = (str(row["subject"]), str(row["method"]), comp_type, db_val, budget_val, str(row["channel"]))
             if k not in groups:
                 groups[k] = []
             groups[k].append(row)
 
         summary_rows = []
-        for (subj, method, db, budget, ch), group_rows in groups.items():
+        for (subj, method, comp_type, db, budget, ch), group_rows in groups.items():
             n_total = len(group_rows)
             prd_vals = []
             prdn_vals = []
@@ -141,6 +145,7 @@ def aggregate_by_subject(
             s_row = {
                 "subject": subj,
                 "method": method,
+                "comparison_type": comp_type,
                 "db": db,
                 "budget": budget,
                 "channel": ch,
@@ -170,20 +175,23 @@ def compute_overall_summary(
     """
     Step 2: Aggregate subject-level stats across all subjects with EQUAL weighting (1/15 per subject).
 
-    Group keys: (method, db, channel)
+    Group keys: (method, comparison_type, db, channel)
     Computes average of subject-level mean, median, p90, and invalid_rate.
     """
     if pd is not None and isinstance(summary_by_subject, pd.DataFrame):
         df = summary_by_subject.copy()
-        group_cols = ["method", "db", "budget", "channel"]
+        if "comparison_type" not in df.columns:
+            df["comparison_type"] = "equal_byte"
+        group_cols = ["method", "comparison_type", "db", "budget", "channel"]
         overall_rows = []
 
         for keys, group in df.groupby(group_cols):
-            method, db, budget, ch = keys
+            method, comp_type, db, budget, ch = keys
             n_subjects = len(group)
 
             row = {
                 "method": method,
+                "comparison_type": comp_type,
                 "db": db,
                 "budget": budget,
                 "channel": ch,
@@ -213,16 +221,18 @@ def compute_overall_summary(
         records = summary_by_subject if isinstance(summary_by_subject, list) else summary_by_subject.to_dict("records")
         groups = {}
         for r in records:
-            k = (r["method"], r["db"], r.get("budget", r["db"]), r["channel"])
+            c_type = str(r.get("comparison_type", "equal_byte"))
+            k = (r["method"], c_type, r["db"], r.get("budget", r["db"]), r["channel"])
             if k not in groups:
                 groups[k] = []
             groups[k].append(r)
 
         overall_rows = []
-        for (method, db, budget, ch), group_rows in groups.items():
+        for (method, comp_type, db, budget, ch), group_rows in groups.items():
             n_subjs = len(group_rows)
             row = {
                 "method": method,
+                "comparison_type": comp_type,
                 "db": db,
                 "budget": budget,
                 "channel": ch,
@@ -251,7 +261,7 @@ def compute_paired_comparison(
     summary_by_subject: Any
 ) -> Any:
     """
-    Compute paired comparison AE vs DCT per subject x db x channel.
+    Compute paired comparison AE vs DCT per subject x db x channel x comparison_type.
 
     Formulas:
     - delta_s = AE_metric_s - DCT_metric_s
@@ -259,10 +269,12 @@ def compute_paired_comparison(
     """
     if pd is not None and isinstance(summary_by_subject, pd.DataFrame):
         df = summary_by_subject.copy()
+        if "comparison_type" not in df.columns:
+            df["comparison_type"] = "equal_byte"
         ae_df = df[df["method"] == "AE"].copy()
         dct_df = df[df["method"] == "DCT"].copy()
 
-        join_keys = ["subject", "db", "budget", "channel"]
+        join_keys = ["subject", "comparison_type", "db", "budget", "channel"]
         merged = pd.merge(
             ae_df,
             dct_df,
@@ -284,7 +296,7 @@ def compute_paired_comparison(
         merged["ae_wins_rmse"] = merged["delta_rmse_mean"] < 0
 
         cols = [
-            "subject", "db", "budget", "channel",
+            "subject", "comparison_type", "db", "budget", "channel",
             "prd_mean_ae", "prd_mean_dct", "delta_prd_mean", "ae_wins_prd",
             "prdn_mean_ae", "prdn_mean_dct", "delta_prdn_mean", "ae_wins_prdn",
             "rmse_mean_ae", "rmse_mean_dct", "delta_rmse_mean", "ae_wins_rmse",
@@ -294,14 +306,14 @@ def compute_paired_comparison(
 
     else:
         records = summary_by_subject if isinstance(summary_by_subject, list) else summary_by_subject.to_dict("records")
-        ae_map = {(r["subject"], r["db"], r.get("budget", r["db"]), r["channel"]): r for r in records if r["method"] == "AE"}
-        dct_map = {(r["subject"], r["db"], r.get("budget", r["db"]), r["channel"]): r for r in records if r["method"] == "DCT"}
+        ae_map = {(r["subject"], str(r.get("comparison_type", "equal_byte")), r["db"], r.get("budget", r["db"]), r["channel"]): r for r in records if r["method"] == "AE"}
+        dct_map = {(r["subject"], str(r.get("comparison_type", "equal_byte")), r["db"], r.get("budget", r["db"]), r["channel"]): r for r in records if r["method"] == "DCT"}
 
         paired_rows = []
         for key, r_ae in ae_map.items():
             if key in dct_map:
                 r_dct = dct_map[key]
-                subj, db, budget, ch = key
+                subj, comp_type, db, budget, ch = key
 
                 d_prd = r_ae["prd_mean"] - r_dct["prd_mean"]
                 d_prdn = r_ae["prdn_mean"] - r_dct["prdn_mean"]
@@ -309,6 +321,7 @@ def compute_paired_comparison(
 
                 p_row = {
                     "subject": subj,
+                    "comparison_type": comp_type,
                     "db": db,
                     "budget": budget,
                     "channel": ch,
