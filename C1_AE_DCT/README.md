@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?style=for-the-badge&logo=pytorch)
 ![SciPy](https://img.shields.io/badge/SciPy-Signal_Processing-005493?style=for-the-badge&logo=scipy)
-![Tests](https://img.shields.io/badge/Tests-75%2F75%20PASSED-brightgreen?style=for-the-badge&logo=pytest)
+![Tests](https://img.shields.io/badge/Tests-78%2F78%20PASSED-brightgreen?style=for-the-badge&logo=pytest)
 ![Dataset](https://img.shields.io/badge/Dataset-PPG--DaLiA-orange?style=for-the-badge)
 
 ---
@@ -29,12 +29,12 @@ Dự án thực hiện so sánh đối đầu toàn diện giữa:
 
 | Hạng mục Kiểm định | Trạng thái | Chi tiết & Kết quả thực nghiệm |
 | :--- | :---: | :--- |
-| **Unit & Integration Test Suite** | 🟢 **100% PASS** | **75/75 tests PASSED** (60 unit tests + 15 real integration tests). |
+| **Unit & Integration Test Suite** | 🟢 **100% PASS** | **78/78 tests PASSED** (63 unit tests + 15 real integration tests). |
 | **PPG-DaLiA Dataset Integration** | 🟢 **100% VERIFIED** | Đã phát hiện & bóc tách đủ 15 subjects ($S1 \dots S15$, 0 NaN, 0 Inf). |
 | **Train-Only Normalization** | 🟢 **100% VERIFIED** | Thống kê Z-score ($ddof=0$) được tính **chỉ từ tập Train** cho từng fold. |
 | **Fold 1 Sanity Check** | 🟢 **18/18 PASS** | End-to-end Sanity Check trên 3,268 Test windows thật của Fold 1 hoàn thành. |
-| **Real Pilot Run (Fold 1, $d_b=8$)** | 🟢 **COMPLETED** | Train Loss: $0.3720 \to 0.0585$, Val Loss: $0.1511 \to 0.0691$ (~3.5s/epoch). |
-| **20 Main Runs & 10 Seed Runs** | 🟡 **READY TO LAUNCH** | Pipeline sẵn sàng kích hoạt chạy chính thức ($100\text{ epochs}, \text{patience}=10$). |
+| **20 Main Runs (5 Folds $\times$ 4 $d_b$)** | 🟢 **COMPLETED** | **20 real AE checkpoints** ($d_b \in \{16, 8, 4, 2\}$, seed 42) đã được huấn luyện & đánh giá trên 15 subjects thật. |
+| **15 Seed Stability Runs ($d_b=8$)** | 🟢 **COMPLETED** | **15 real checkpoints** (5 Folds $\times$ 3 Seeds: 42, 123, 999) đã được huấn luyện & đánh giá trên 15 subjects thật. |
 
 ---
 
@@ -230,7 +230,7 @@ C1_AE_DCT/
 | **Hệ điều hành** | Windows 11 Home/Pro 64-bit |
 | **Bộ xử lý (CPU)** | AMD Ryzen / Intel Core Series (AMD64 Architecture) |
 | **Bộ nhớ RAM** | 16 GB System Memory |
-| **GPU / Acceleration** | NVIDIA GeForce RTX Series / CUDA Execution |
+| **GPU / Acceleration** | CPU Execution Mode (PyTorch 2.x) |
 | **Python Version** | Python `3.10+` (Tested on Python `3.14.5`) |
 | **Core Libraries** | PyTorch `2.x`, NumPy `2.x`, SciPy `1.x`, Matplotlib `3.x`, PyTest `9.x` |
 

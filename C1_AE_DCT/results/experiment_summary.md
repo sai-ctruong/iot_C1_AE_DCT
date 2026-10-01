@@ -50,8 +50,13 @@
 
 ## 3. Paired Comparison: Autoencoder vs DCT Baseline
 
-- **Total Paired Subject-Channel Comparisons:** 480
-- **Autoencoder Win Count ($\delta_s < 0$):** 16 / 480 (3.3%)
+### A. Equal-Dimension Comparison (K = M)
+- **Total Paired Subject-Channel Comparisons:** 240
+- **Autoencoder Win Count (\delta_s < 0):** 0 / 240 (0.0%)
+
+### B. Equal-Byte Comparison (K = floor(4M/6), Byte-matched)
+- **Total Paired Subject-Channel Comparisons:** 240
+- **Autoencoder Win Count (\delta_s < 0):** 16 / 240 (6.7%)
 
 ## 4. Equal Byte Budget Cost Allocation (Table 8)
 

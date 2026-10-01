@@ -378,8 +378,10 @@ def generate_real_failure_cases(
 def generate_experiment_summary_md(
     val_info: Dict[str, Any],
     df_subject: Any,
-    df_overall: Any,
-    df_paired: Any,
+    df_overall_dim: Any,
+    df_overall_byte: Any,
+    df_paired_dim: Any,
+    df_paired_byte: Any,
     output_filepath: Union[str, Path] = "results/experiment_summary.md"
 ) -> Path:
     """
@@ -389,13 +391,16 @@ def generate_experiment_summary_md(
     out_path = Path(output_filepath)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    records_overall = df_overall.to_dict("records") if hasattr(df_overall, "to_dict") else df_overall
-    records_paired = df_paired.to_dict("records") if hasattr(df_paired, "to_dict") else df_paired
+    records_paired_dim = df_paired_dim.to_dict("records") if hasattr(df_paired_dim, "to_dict") else df_paired_dim
+    records_paired_byte = df_paired_byte.to_dict("records") if hasattr(df_paired_byte, "to_dict") else df_paired_byte
 
-    # Compute dynamic summary stats
-    ae_wins_count = sum(1 for r in records_paired if r.get("ae_wins_prd", False))
-    total_pairs = len(records_paired)
-    win_rate = (ae_wins_count / total_pairs * 100.0) if total_pairs > 0 else 0.0
+    ae_wins_dim = sum(1 for r in records_paired_dim if r.get("ae_wins_prd", False))
+    total_pairs_dim = len(records_paired_dim)
+    win_rate_dim = (ae_wins_dim / total_pairs_dim * 100.0) if total_pairs_dim > 0 else 0.0
+
+    ae_wins_byte = sum(1 for r in records_paired_byte if r.get("ae_wins_prd", False))
+    total_pairs_byte = len(records_paired_byte)
+    win_rate_byte = (ae_wins_byte / total_pairs_byte * 100.0) if total_pairs_byte > 0 else 0.0
 
     table7_df = generate_table7_mean_std_across_subjects(df_subject)
     table7_recs = table7_df.to_dict("records") if hasattr(table7_df, "to_dict") else table7_df
@@ -437,8 +442,13 @@ def generate_experiment_summary_md(
         "",
         "## 3. Paired Comparison: Autoencoder vs DCT Baseline",
         "",
-        r"- **Total Paired Subject-Channel Comparisons:** " + f"{total_pairs}",
-        r"- **Autoencoder Win Count ($\delta_s < 0$):** " + f"{ae_wins_count} / {total_pairs} ({win_rate:.1f}%)",
+        "### A. Equal-Dimension Comparison (K = M)",
+        f"- **Total Paired Subject-Channel Comparisons:** {total_pairs_dim}",
+        f"- **Autoencoder Win Count (\\delta_s < 0):** {ae_wins_dim} / {total_pairs_dim} ({win_rate_dim:.1f}%)",
+        "",
+        "### B. Equal-Byte Comparison (K = floor(4M/6), Byte-matched)",
+        f"- **Total Paired Subject-Channel Comparisons:** {total_pairs_byte}",
+        f"- **Autoencoder Win Count (\\delta_s < 0):** {ae_wins_byte} / {total_pairs_byte} ({win_rate_byte:.1f}%)",
         "",
         "## 4. Equal Byte Budget Cost Allocation (Table 8)",
         "",
@@ -544,51 +554,87 @@ def make_report(
     # Step 2: Pre-reporting validation
     val_info = validate_before_report(df_results)
 
-    # Step 3: Compute aggregations
+    # Step 3: Compute aggregations for both equal_dim and equal_byte comparisons
     df_subject = aggregate_by_subject(df_results)
-    df_overall = compute_overall_summary(df_subject)
-    df_paired = compute_paired_comparison(df_subject)
+
+    if pd is not None and isinstance(df_subject, pd.DataFrame):
+        df_subj_dim = df_subject[df_subject["comparison_type"] == "equal_dim"].copy()
+        df_subj_byte = df_subject[df_subject["comparison_type"] == "equal_byte"].copy()
+    else:
+        df_subj_dim = [r for r in df_subject if r.get("comparison_type") == "equal_dim"]
+        df_subj_byte = [r for r in df_subject if r.get("comparison_type") == "equal_byte"]
+
+    df_overall_dim = compute_overall_summary(df_subj_dim)
+    df_overall_byte = compute_overall_summary(df_subj_byte)
+
+    df_paired_dim = compute_paired_comparison(df_subj_dim)
+    df_paired_byte = compute_paired_comparison(df_subj_byte)
 
     # Step 4: Export CSVs
     p_subj = out_dir / "summary_by_subject.csv"
-    p_pair = out_dir / "paired_comparison.csv"
-    p_over = out_dir / "overall_summary.csv"
+    p_pair_dim = out_dir / "paired_comparison_equal_dim.csv"
+    p_pair_byte = out_dir / "paired_comparison_equal_byte.csv"
+    p_over_dim = out_dir / "overall_summary_equal_dim.csv"
+    p_over_byte = out_dir / "overall_summary_equal_byte.csv"
+    p_pair_legacy = out_dir / "paired_comparison.csv"
+    p_over_legacy = out_dir / "overall_summary.csv"
 
     save_records_to_csv(df_subject, p_subj)
-    save_records_to_csv(df_paired, p_pair)
-    save_records_to_csv(df_overall, p_over)
+    save_records_to_csv(df_paired_dim, p_pair_dim)
+    save_records_to_csv(df_paired_byte, p_pair_byte)
+    save_records_to_csv(df_overall_dim, p_over_dim)
+    save_records_to_csv(df_overall_byte, p_over_byte)
+    save_records_to_csv(df_paired_byte, p_pair_legacy)
+    save_records_to_csv(df_overall_byte, p_over_legacy)
 
     # Step 5: Generate PNG plots with exact required filenames
-    records_overall = _extract_overall_summary_records(df_overall)
+    records_overall_byte = _extract_overall_summary_records(df_overall_byte)
 
     p_cr_dim_prd = out_dir / "cr_dim_prd.png"
     p_cr_byte_prd = out_dir / "cr_byte_prd.png"
+    p_cr_dim_prdn = out_dir / "cr_dim_prdn.png"
+    p_cr_byte_prdn = out_dir / "cr_byte_prdn.png"
     p_prdn_curves = out_dir / "prdn_curves.png"
     p_rmse_curves = out_dir / "rmse_curves.png"
 
     plot_metric_vs_cr(
-        records_overall, x_key="CR_dim", y_key="prd_mean",
+        records_overall_byte, x_key="CR_dim", y_key="prd_mean",
         x_label="Dimension Compression Ratio (CR_dim)", y_label="PRD (%)",
-        title="CR_dim vs PRD (%) Across Channels",
+        title="CR_dim vs PRD (%) Across Channels (Equal-Byte)",
         png_path=p_cr_dim_prd, csv_path=out_dir / "cr_dim_prd_data.csv"
     )
 
     plot_metric_vs_cr(
-        records_overall, x_key="CR_byte_64", y_key="prd_mean",
+        records_overall_byte, x_key="CR_byte_64", y_key="prd_mean",
         x_label="Byte Compression Ratio (CR_byte_64)", y_label="PRD (%)",
-        title="CR_byte vs PRD (%) Across Channels",
+        title="CR_byte vs PRD (%) Across Channels (Equal-Byte)",
         png_path=p_cr_byte_prd, csv_path=out_dir / "cr_byte_prd_data.csv"
     )
 
     plot_metric_vs_cr(
-        records_overall, x_key="CR_dim", y_key="prdn_mean",
+        records_overall_byte, x_key="CR_dim", y_key="prdn_mean",
+        x_label="Dimension Compression Ratio (CR_dim)", y_label="PRDN (%)",
+        title="CR_dim vs PRDN (%) Distortion Curves (Equal-Byte)",
+        png_path=p_cr_dim_prdn, csv_path=out_dir / "cr_dim_prdn_data.csv"
+    )
+
+    plot_metric_vs_cr(
+        records_overall_byte, x_key="CR_byte_64", y_key="prdn_mean",
+        x_label="Byte Compression Ratio (CR_byte_64)", y_label="PRDN (%)",
+        title="CR_byte vs PRDN (%) Distortion Curves (Equal-Byte)",
+        png_path=p_cr_byte_prdn, csv_path=out_dir / "cr_byte_prdn_data.csv"
+    )
+
+    # Export prdn_curves.png as alias to cr_dim_prdn.png
+    plot_metric_vs_cr(
+        records_overall_byte, x_key="CR_dim", y_key="prdn_mean",
         x_label="Dimension Compression Ratio (CR_dim)", y_label="PRDN (%)",
         title="PRDN Distortion Curves Across Channels",
         png_path=p_prdn_curves, csv_path=out_dir / "prdn_curves_data.csv"
     )
 
     plot_metric_vs_cr(
-        records_overall, x_key="CR_dim", y_key="rmse_mean",
+        records_overall_byte, x_key="CR_dim", y_key="rmse_mean",
         x_label="Dimension Compression Ratio (CR_dim)", y_label="RMSE (Physical Units)",
         title="RMSE Distortion Curves Across Channels",
         png_path=p_rmse_curves, csv_path=out_dir / "rmse_curves_data.csv"
@@ -603,22 +649,30 @@ def make_report(
     generate_real_failure_cases(df_results, p_failure_ex, p_failure_csv)
 
     # Step 7: Generate dynamic experiment_summary.md
-    p_md = generate_experiment_summary_md(val_info, df_subject, df_overall, df_paired, out_dir / "experiment_summary.md")
+    p_md = generate_experiment_summary_md(
+        val_info, df_subject, df_overall_dim, df_overall_byte, df_paired_dim, df_paired_byte, out_dir / "experiment_summary.md"
+    )
 
     print(f"\n==========================================================")
-    print("      TASK 24 — AUTOMATED REPORT GENERATOR COMPLETED      ")
+    print("      TASK 24 / TASK 7 — AUTOMATED REPORT GENERATOR COMPLETED      ")
     print("==========================================================")
-    print(f"Generated CSVs:       {p_subj.name}, {p_pair.name}, {p_over.name}, {p_failure_csv.name}")
-    print(f"Generated PNGs:       {p_cr_dim_prd.name}, {p_cr_byte_prd.name}, {p_prdn_curves.name}, {p_rmse_curves.name}, {p_recon_ex.name}, {p_failure_ex.name}")
+    print(f"Generated CSVs:       {p_subj.name}, {p_pair_dim.name}, {p_pair_byte.name}, {p_over_dim.name}, {p_over_byte.name}, {p_failure_csv.name}")
+    print(f"Generated PNGs:       {p_cr_dim_prd.name}, {p_cr_byte_prd.name}, {p_cr_dim_prdn.name}, {p_cr_byte_prdn.name}, {p_rmse_curves.name}, {p_recon_ex.name}, {p_failure_ex.name}")
     print(f"Generated Markdown:   {p_md.name}")
     print("==========================================================")
 
     return {
         "summary_by_subject": p_subj,
-        "paired_comparison": p_pair,
-        "overall_summary": p_over,
+        "paired_comparison_equal_dim": p_pair_dim,
+        "paired_comparison_equal_byte": p_pair_byte,
+        "overall_summary_equal_dim": p_over_dim,
+        "overall_summary_equal_byte": p_over_byte,
+        "paired_comparison": p_pair_legacy,
+        "overall_summary": p_over_legacy,
         "cr_dim_prd": p_cr_dim_prd,
         "cr_byte_prd": p_cr_byte_prd,
+        "cr_dim_prdn": p_cr_dim_prdn,
+        "cr_byte_prdn": p_cr_byte_prdn,
         "prdn_curves": p_prdn_curves,
         "rmse_curves": p_rmse_curves,
         "reconstruction_examples": p_recon_ex,
