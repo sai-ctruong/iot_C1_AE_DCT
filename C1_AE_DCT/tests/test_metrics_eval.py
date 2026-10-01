@@ -193,8 +193,44 @@ def test_case_5_normalize_identity_denormalize_pipeline():
 
 
 
+def test_c1_denominator_validity_threshold_with_sigma_train():
+    """
+    Test C1 Spec Denominator-Near-Zero Threshold Rule:
+    threshold_c = N * 1e-12 * (sigma_c ** 2)
+    where N = len(x_ref) = 512, sigma_c = Train std of channel c.
+    """
+    n = 512
+    sigma_c = 10.0  # Train std = 10.0
+    threshold_expected = 512 * 1e-12 * (10.0 ** 2)  # 512 * 1e-12 * 100 = 5.12e-9
+
+    # Signal with centered variance = 4.0e-9 (below threshold_expected -> invalid PRDN)
+    t = np.linspace(0, 1, n)
+    x_ref_small = np.sin(2 * np.pi * t) * math.sqrt(2.0 * 4.0e-9 / n) + 5.0
+    x_pred_small = x_ref_small + 1e-5
+
+    m_small = compute_channel_metrics(x_ref_small, x_pred_small, channel_name="PPG", sigma_train=sigma_c)
+    assert m_small["valid_prdn"] is False, f"Expected valid_prdn=False for centered energy below threshold"
+    assert math.isnan(m_small["prdn"]), f"Expected NaN PRDN"
+
+    # Signal with centered variance = 1.0e-7 (above threshold_expected -> valid PRDN)
+    x_ref_large = np.sin(2 * np.pi * t) * math.sqrt(2.0 * 1.0e-7 / n) + 5.0
+    x_pred_large = x_ref_large + 1e-5
+
+    m_large = compute_channel_metrics(x_ref_large, x_pred_large, channel_name="PPG", sigma_train=sigma_c)
+    assert m_large["valid_prdn"] is True, f"Expected valid_prdn=True for centered energy above threshold"
+    assert math.isfinite(m_large["prdn"]), f"Expected finite PRDN"
+
+    # Verify AE and DCT produce identical validity flags on same reference signal
+    ae_pred = x_ref_large + 0.01
+    dct_pred = x_ref_large + 0.05
+    m_ae = compute_channel_metrics(x_ref_large, ae_pred, channel_name="PPG", sigma_train=sigma_c)
+    m_dct = compute_channel_metrics(x_ref_large, dct_pred, channel_name="PPG", sigma_train=sigma_c)
+    assert m_ae["valid_prd"] == m_dct["valid_prd"]
+    assert m_ae["valid_prdn"] == m_dct["valid_prdn"]
+
+
 def run_all_task_19_tests():
-    """Run all 5 test cases and print clear PASS/FAIL report."""
+    """Run all test cases and print clear PASS/FAIL report."""
     print("\n==========================================================")
     print("      TASK 19 — EVALUATION METRICS VERIFICATION SUITE     ")
     print("==========================================================")
@@ -205,6 +241,7 @@ def run_all_task_19_tests():
         ("Case 3: AE and DCT shared valid mask", test_case_3_ae_dct_shared_valid_mask),
         ("Case 4: 4 channels calculated independently", test_case_4_per_channel_independent_calculation),
         ("Case 5: normalize -> model identity -> denormalize pipeline", test_case_5_normalize_identity_denormalize_pipeline),
+        ("Case 6: C1 spec denominator threshold with sigma_train", test_c1_denominator_validity_threshold_with_sigma_train),
     ]
 
     passed_count = 0
@@ -227,4 +264,5 @@ def run_all_task_19_tests():
 
 if __name__ == "__main__":
     run_all_task_19_tests()
+
 

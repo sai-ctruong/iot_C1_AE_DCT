@@ -26,14 +26,14 @@ STRICT RULES:
   * 5 folds (1..5)
   * 4 db budgets (16, 8, 4, 2)
   * Complete AE/DCT pairing
-  * Byte length validity
-  * Consistent metric valid mask
 """
 
 import os
 import sys
 import csv
 import math
+import gzip
+import shutil
 from pathlib import Path
 from typing import Dict, List, Any, Union, Optional, Tuple
 import numpy as np
@@ -54,6 +54,8 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     plt = None
+
+import torch
 
 from src.results_schema import (
     RESULT_SCHEMA_COLUMNS,
@@ -80,6 +82,11 @@ from src.reconstruction_visualization import (
     plot_single_window_comparison,
 )
 from src.metrics import compute_equal_byte_budget
+from src.normalize import load_norm_stats, denormalize
+from src.baseline_dct import dct_encode_topk, dct_decode
+from src.codec import encode_ae_bytes, decode_ae_bytes, encode_dct_bytes, decode_dct_bytes
+from src.model import C1Autoencoder
+from src.evaluate import compute_channel_metrics
 
 EXPECTED_SUBJECTS = {f"S{i}" for i in range(1, 16)}
 EXPECTED_FOLDS = {1, 2, 3, 4, 5}
@@ -135,14 +142,23 @@ def validate_before_report(df_or_list: Any) -> Dict[str, Any]:
 
     for r in records:
         db = int(r["db"])
-        expected_bytes = 16 + 4 * (32 * db)
+        comp_type = str(r.get("comparison_type", "equal_byte"))
+        method = str(r["method"])
+
+        if comp_type == "equal_dim" and method == "DCT":
+            m_dim = 32 * db
+            expected_bytes = 16 + 6 * m_dim
+        else:
+            m_dim = 32 * db
+            expected_bytes = 16 + 4 * m_dim
+
         if int(r["nbytes"]) != expected_bytes:
             invalid_byte_counts += 1
 
-        key = (int(r["fold"]), str(r["subject"]), str(r["window_id"]), str(r["channel"]), db)
-        if r["method"] == "AE":
+        key = (int(r["fold"]), str(r["subject"]), str(r["window_id"]), str(r["channel"]), db, comp_type)
+        if method == "AE":
             ae_map[key] = r
-        elif r["method"] == "DCT":
+        elif method == "DCT":
             dct_map[key] = r
 
     if invalid_byte_counts > 0:
@@ -183,77 +199,180 @@ def validate_before_report(df_or_list: Any) -> Dict[str, Any]:
     }
 
 
-def generate_synthetic_full_results(output_path: Union[str, Path]) -> Path:
-    """Generate a valid synthetic results.csv covering 5 folds, 15 subjects, 4 d_b budgets for reporting test."""
-    out_file = Path(output_path)
-    out_file.parent.mkdir(parents=True, exist_ok=True)
+def generate_real_reconstruction_examples(
+    output_filepath: Union[str, Path]
+) -> Path:
+    """
+    Generate reconstruction_examples.png using 100% REAL PPG-DaLiA Test Data,
+    real trained AE checkpoint (Fold 1, db=8), and real DCT baseline.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    proc_test_path = PROJECT_ROOT / "data" / "processed" / "fold1" / "test.npz"
+    norm_stats_path = PROJECT_ROOT / "configs" / "norm_stats_fold1.json"
+    ckpt_path = PROJECT_ROOT / "checkpoints" / "fold01_db08_seed42.pt"
 
-    np.random.seed(42)
-    records = []
+    if not proc_test_path.exists() or not norm_stats_path.exists() or not ckpt_path.exists():
+        raise FileNotFoundError("[ERROR] Required real data files or checkpoint missing for fold 1 db=8!")
 
-    # Map 15 subjects to 5 folds (3 test subjects per fold)
-    fold_test_map = {
-        1: ["S1", "S2", "S3"],
-        2: ["S4", "S5", "S6"],
-        3: ["S7", "S8", "S9"],
-        4: ["S10", "S11", "S12"],
-        5: ["S13", "S14", "S15"],
+    npz_data = np.load(proc_test_path, allow_pickle=True)
+    test_windows_norm = npz_data["windows"].astype(np.float32)
+    test_meta_arr = npz_data["metadata"]
+    test_meta_list = test_meta_arr.item() if test_meta_arr.ndim == 0 else list(test_meta_arr)
+    norm_stats = load_norm_stats(norm_stats_path)
+
+    # Pick first window (Subject S1)
+    w_norm = test_windows_norm[0]  # Shape (4, 512)
+    w_meta = test_meta_list[0]
+
+    # Real AE reconstruction
+    ckpt_data = torch.load(ckpt_path, map_location=device)
+    model = C1Autoencoder(d_b=8).to(device)
+    model.load_state_dict(ckpt_data["model_state_dict"])
+    model.eval()
+
+    with torch.no_grad():
+        x_in = torch.from_numpy(w_norm).unsqueeze(0).float().to(device)
+        latent_tensor = model.encode(x_in)
+        latent_np = latent_tensor.cpu().numpy()
+        ae_bytes = encode_ae_bytes(latent_np, d_b=8, profile_id=0)
+        latent_dec_np, _ = decode_ae_bytes(ae_bytes)
+        latent_dec_tensor = torch.from_numpy(latent_dec_np.reshape(1, 8, 32)).float().to(device)
+        rec_norm_ae = model.decode(latent_dec_tensor).squeeze(0).cpu().numpy()
+
+    # Real DCT reconstruction (d_b=8 -> K_equal_byte = 170, pad = 4)
+    b_info = compute_equal_byte_budget(8)
+    k_eq_byte = b_info["K_equal_byte"]
+    pad_bytes = b_info["padding"]
+    topk_vals, topk_idxs, _, _ = dct_encode_topk(w_norm, k=k_eq_byte)
+    dct_bytes = encode_dct_bytes(topk_vals, topk_idxs, d_b=8, profile_id=0, pad_bytes=pad_bytes)
+    dec_vals, dec_idxs, _ = decode_dct_bytes(dct_bytes)
+    sparse_dct = np.zeros((4, 512), dtype=np.float32)
+    np.put(sparse_dct, dec_idxs, dec_vals)
+    rec_norm_dct = dct_decode(sparse_dct)
+
+    # Denormalize all signals to physical scale
+    ref_phys = denormalize(w_norm, norm_stats)
+    ae_phys = denormalize(rec_norm_ae, norm_stats)
+    dct_phys = denormalize(rec_norm_dct, norm_stats)
+
+    meta_dict = {
+        "subject": w_meta["subject"],
+        "window_id": w_meta["window_id"],
+        "db": 8,
     }
+    for c_idx, ch_name in enumerate(CHANNEL_NAMES):
+        sigma_c = float(norm_stats["std"][c_idx])
+        m_ae = compute_channel_metrics(ref_phys[c_idx], ae_phys[c_idx], channel_name=ch_name, sigma_train=sigma_c)
+        m_dct = compute_channel_metrics(ref_phys[c_idx], dct_phys[c_idx], channel_name=ch_name, sigma_train=sigma_c)
+        meta_dict[f"prd_ae_{ch_name}"] = m_ae["prd"]
+        meta_dict[f"prd_dct_{ch_name}"] = m_dct["prd"]
 
-    t = np.linspace(0, 10, 512)
+    return plot_single_window_comparison(ref_phys, ae_phys, dct_phys, meta=meta_dict, output_filepath=output_filepath)
 
-    for fold, subjs in fold_test_map.items():
-        for subj in subjs:
-            for db in [16, 8, 4, 2]:
-                nbytes = 16 + 4 * (32 * db)
-                cr_dim_ae = 2048.0 / (32 * db)
-                k_dct = (4 * 32 * db) // 6
-                cr_dim_dct = 2048.0 / float(k_dct)
-                cr_b64 = 8192.0 / float(nbytes)
-                cr_bnative = 5120.0 / float(nbytes)
 
-                for w in range(4):  # 4 windows per subject
-                    w_id = f"win_{fold:02d}_{subj}_{w:04d}"
+def generate_real_failure_cases(
+    df_results: Any,
+    output_filepath_png: Union[str, Path],
+    output_filepath_csv: Union[str, Path]
+) -> Tuple[Path, Path]:
+    """
+    Generate failure_cases.png and failure_cases.csv using 100% REAL evaluated results from results.csv.
+    Selection Rule: Sort db=2 rows by PRD descending to find the worst-case real window.
+    Reconstructs that exact real window using real AE and DCT baselines.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    records = df_results.to_dict("records") if hasattr(df_results, "to_dict") else df_results
 
-                    for ch_idx, ch in enumerate(CHANNEL_NAMES):
-                        # AE error is systematically lower than DCT error
-                        ae_prd = float(2.0 + (16 - db) * 0.4 + np.random.randn() * 0.2)
-                        dct_prd = float(3.5 + (16 - db) * 0.6 + np.random.randn() * 0.3)
+    valid_db2_recs = [
+        r for r in records
+        if int(r["db"]) == 2 and (str(r.get("valid_prd")).lower() == "true" or r.get("valid_prd") is True)
+    ]
+    if not valid_db2_recs:
+        valid_db2_recs = [
+            r for r in records
+            if (str(r.get("valid_prd")).lower() == "true" or r.get("valid_prd") is True)
+        ]
 
-                        ae_prdn = ae_prd * 2.1
-                        dct_prdn = dct_prd * 2.2
+    # Sort descending by PRD
+    sorted_recs = sorted(valid_db2_recs, key=lambda r: float(r["PRD"]), reverse=True)
 
-                        ae_rmse = ae_prd * 0.02
-                        dct_rmse = dct_prd * 0.025
+    # Export failure_cases.csv (top worst failure rows)
+    csv_path = export_failure_cases_csv(sorted_recs[:16], output_filepath=output_filepath_csv)
 
-                        # AE row
-                        r_ae = create_result_row(
-                            fold=fold, subject=subj, seed=42, method="AE", db=db, K=32*db,
-                            channel=ch, window_id=w_id, start_index=w*512, nbytes=nbytes,
-                            CR_dim=cr_dim_ae, CR_byte_64=cr_b64, CR_byte_native=cr_bnative,
-                            PRD=ae_prd, PRDN=ae_prdn, RMSE=ae_rmse, metric_valid=True,
-                            checkpoint=f"checkpoints/ae_f{fold}_db{db}.pt", config_id=f"AE_f{fold}_db{db}"
-                        )
-                        r_ae["valid_prd"] = True
-                        r_ae["valid_prdn"] = True
+    # Pick top worst failure row
+    worst_row = sorted_recs[0]
+    fold = int(worst_row["fold"])
+    subj = str(worst_row["subject"])
+    w_id = str(worst_row["window_id"])
+    db = int(worst_row["db"])
 
-                        # DCT row
-                        r_dct = create_result_row(
-                            fold=fold, subject=subj, seed=42, method="DCT", db=db, K=k_dct,
-                            channel=ch, window_id=w_id, start_index=w*512, nbytes=nbytes,
-                            CR_dim=cr_dim_dct, CR_byte_64=cr_b64, CR_byte_native=cr_bnative,
-                            PRD=dct_prd, PRDN=dct_prdn, RMSE=dct_rmse, metric_valid=True,
-                            checkpoint="N/A", config_id=f"DCT_db{db}"
-                        )
-                        r_dct["valid_prd"] = True
-                        r_dct["valid_prdn"] = True
+    proc_test_path = PROJECT_ROOT / "data" / "processed" / f"fold{fold}" / "test.npz"
+    norm_stats_path = PROJECT_ROOT / "configs" / f"norm_stats_fold{fold}.json"
+    ckpt_path = PROJECT_ROOT / "checkpoints" / f"fold{fold:02d}_db{db:02d}_seed42.pt"
 
-                        records.append(r_ae)
-                        records.append(r_dct)
+    if not proc_test_path.exists() or not norm_stats_path.exists() or not ckpt_path.exists():
+        raise FileNotFoundError(f"[ERROR] Required real dataset/checkpoint missing for fold {fold} db {db}!")
 
-    save_records_to_csv(records, out_file)
-    print(f"[TASK 24] Generated synthetic results.csv with {len(records)} rows at: {out_file}")
-    return out_file
+    npz_data = np.load(proc_test_path, allow_pickle=True)
+    test_windows_norm = npz_data["windows"].astype(np.float32)
+    test_meta_arr = npz_data["metadata"]
+    test_meta_list = test_meta_arr.item() if test_meta_arr.ndim == 0 else list(test_meta_arr)
+    norm_stats = load_norm_stats(norm_stats_path)
+
+    # Find matching window index
+    target_w_idx = 0
+    for idx, m in enumerate(test_meta_list):
+        if str(m.get("window_id")) == w_id:
+            target_w_idx = idx
+            break
+
+    w_norm = test_windows_norm[target_w_idx]
+
+    # Real AE reconstruction
+    ckpt_data = torch.load(ckpt_path, map_location=device)
+    model = C1Autoencoder(d_b=db).to(device)
+    model.load_state_dict(ckpt_data["model_state_dict"])
+    model.eval()
+
+    with torch.no_grad():
+        x_in = torch.from_numpy(w_norm).unsqueeze(0).float().to(device)
+        latent_tensor = model.encode(x_in)
+        latent_np = latent_tensor.cpu().numpy()
+        ae_bytes = encode_ae_bytes(latent_np, d_b=db, profile_id=0)
+        latent_dec_np, _ = decode_ae_bytes(ae_bytes)
+        latent_dec_tensor = torch.from_numpy(latent_dec_np.reshape(1, db, 32)).float().to(device)
+        rec_norm_ae = model.decode(latent_dec_tensor).squeeze(0).cpu().numpy()
+
+    # Real DCT reconstruction
+    b_info = compute_equal_byte_budget(db)
+    k_eq_byte = b_info["K_equal_byte"]
+    pad_bytes = b_info["padding"]
+    topk_vals, topk_idxs, _, _ = dct_encode_topk(w_norm, k=k_eq_byte)
+    dct_bytes = encode_dct_bytes(topk_vals, topk_idxs, d_b=db, profile_id=0, pad_bytes=pad_bytes)
+    dec_vals, dec_idxs, _ = decode_dct_bytes(dct_bytes)
+    sparse_dct = np.zeros((4, 512), dtype=np.float32)
+    np.put(sparse_dct, dec_idxs, dec_vals)
+    rec_norm_dct = dct_decode(sparse_dct)
+
+    # Denormalize all signals to physical scale
+    ref_phys = denormalize(w_norm, norm_stats)
+    ae_phys = denormalize(rec_norm_ae, norm_stats)
+    dct_phys = denormalize(rec_norm_dct, norm_stats)
+
+    meta_dict = {
+        "subject": subj,
+        "window_id": w_id,
+        "db": db,
+    }
+    for c_idx, ch_name in enumerate(CHANNEL_NAMES):
+        sigma_c = float(norm_stats["std"][c_idx])
+        m_ae = compute_channel_metrics(ref_phys[c_idx], ae_phys[c_idx], channel_name=ch_name, sigma_train=sigma_c)
+        m_dct = compute_channel_metrics(ref_phys[c_idx], dct_phys[c_idx], channel_name=ch_name, sigma_train=sigma_c)
+        meta_dict[f"prd_ae_{ch_name}"] = m_ae["prd"]
+        meta_dict[f"prd_dct_{ch_name}"] = m_dct["prd"]
+
+    png_path = plot_single_window_comparison(ref_phys, ae_phys, dct_phys, meta=meta_dict, output_filepath=output_filepath_png)
+    return png_path, csv_path
 
 
 def generate_experiment_summary_md(
@@ -327,7 +446,6 @@ def generate_experiment_summary_md(
         "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
     ])
 
-
     for r in table8_recs:
         md_lines.append(
             f"| {r['db']} | {r['M']} | {r['K_equal_dim']} | {r['K_equal_byte']} | {r['padding']} | "
@@ -386,21 +504,34 @@ def make_report(
     output_dir: Union[str, Path] = "results"
 ) -> Dict[str, Path]:
     """
-    Main Automated Report Generation pipeline for TASK 24.
+    Main Automated Report Generation pipeline for TASK 24 / TASK 5.
 
-    1. Reads results/results.csv (generates representative CSV if missing).
+    1. Reads results/results.csv (or decompresses results.csv.gz if present).
+       RAISES FileNotFoundError if results dataset is missing (ZERO synthetic fallback).
     2. Runs strict pre-reporting validation checks.
     3. Computes subject aggregation, overall summary, paired comparison.
     4. Saves CSVs: summary_by_subject.csv, paired_comparison.csv, overall_summary.csv.
-    5. Generates PNG plots: cr_dim_prd.png, cr_byte_prd.png, prdn_curves.png, rmse_curves.png, reconstruction_examples.png, failure_cases.png.
-    6. Generates experiment_summary.md with dynamic zero hard-coded content.
+    5. Generates PNG plots: cr_dim_prd.png, cr_byte_prd.png, prdn_curves.png, rmse_curves.png.
+    6. Generates 100% REAL signal reconstructions for reconstruction_examples.png and failure_cases.png.
+    7. Generates experiment_summary.md with dynamic zero hard-coded content.
     """
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_file = Path(results_csv_path)
 
+    # Check for uncompressed or compressed results file
     if not csv_file.exists():
-        csv_file = generate_synthetic_full_results(csv_file)
+        gz_file = csv_file.parent / (csv_file.name + ".gz")
+        if gz_file.exists():
+            print(f"Decompressing {gz_file.name} -> {csv_file.name}...")
+            with gzip.open(gz_file, "rb") as f_in, open(csv_file, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        else:
+            raise FileNotFoundError(
+                f"[ERROR] Results file '{csv_file}' not found! "
+                "Synthetic fallback is permanently disabled in production reporting. "
+                "Please run 'python src/evaluate_all.py' first to evaluate real checkpoints on test windows."
+            )
 
     # Step 1: Read results dataset
     if pd is not None:
@@ -463,34 +594,21 @@ def make_report(
         png_path=p_rmse_curves, csv_path=out_dir / "rmse_curves_data.csv"
     )
 
-    # Generate synthetic windows for reconstruction & failure plots
-    t = np.linspace(0, 10, 512)
-    orig_sample = np.array([np.sin(t) + 5.0, np.cos(t) + 0.1, np.sin(2*t) - 0.2, np.cos(2*t) + 9.8])
-    ae_sample = orig_sample + 0.05 * np.random.randn(4, 512)
-    dct_sample = orig_sample + 0.1 * np.random.randn(4, 512)
-
+    # Step 6: Generate 100% REAL signal reconstructions for typical & failure plots
     p_recon_ex = out_dir / "reconstruction_examples.png"
     p_failure_ex = out_dir / "failure_cases.png"
+    p_failure_csv = out_dir / "failure_cases.csv"
 
-    plot_single_window_comparison(
-        orig_sample, ae_sample, dct_sample,
-        meta={"subject": "S1", "window_id": "win_typical_db8", "db": 8, "prd_ae_PPG": 2.1, "prd_dct_PPG": 4.5},
-        output_filepath=p_recon_ex
-    )
+    generate_real_reconstruction_examples(p_recon_ex)
+    generate_real_failure_cases(df_results, p_failure_ex, p_failure_csv)
 
-    plot_single_window_comparison(
-        orig_sample, ae_sample + 0.2, dct_sample + 0.3,
-        meta={"subject": "S1", "window_id": "win_worst_db2", "db": 2, "prd_ae_PPG": 14.5, "prd_dct_PPG": 22.8},
-        output_filepath=p_failure_ex
-    )
-
-    # Step 6: Generate dynamic experiment_summary.md
+    # Step 7: Generate dynamic experiment_summary.md
     p_md = generate_experiment_summary_md(val_info, df_subject, df_overall, df_paired, out_dir / "experiment_summary.md")
 
     print(f"\n==========================================================")
     print("      TASK 24 — AUTOMATED REPORT GENERATOR COMPLETED      ")
     print("==========================================================")
-    print(f"Generated CSVs:       {p_subj.name}, {p_pair.name}, {p_over.name}")
+    print(f"Generated CSVs:       {p_subj.name}, {p_pair.name}, {p_over.name}, {p_failure_csv.name}")
     print(f"Generated PNGs:       {p_cr_dim_prd.name}, {p_cr_byte_prd.name}, {p_prdn_curves.name}, {p_rmse_curves.name}, {p_recon_ex.name}, {p_failure_ex.name}")
     print(f"Generated Markdown:   {p_md.name}")
     print("==========================================================")
@@ -505,6 +623,7 @@ def make_report(
         "rmse_curves": p_rmse_curves,
         "reconstruction_examples": p_recon_ex,
         "failure_cases": p_failure_ex,
+        "failure_cases_csv": p_failure_csv,
         "experiment_summary_md": p_md,
     }
 
@@ -517,3 +636,4 @@ def generate_report(results: Optional[Dict[str, Any]] = None, output_path: str =
 
 if __name__ == "__main__":
     make_report()
+

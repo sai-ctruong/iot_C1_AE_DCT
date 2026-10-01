@@ -121,7 +121,10 @@ def evaluate_all_test_folds(
                     rec_phys_ae = denormalize(rec_norm_ae, norm_stats)
 
                     for c_idx, ch_name in enumerate(CHANNEL_NAMES):
-                        ch_m_ae = compute_channel_metrics(ref_phys[c_idx], rec_phys_ae[c_idx], channel_name=ch_name)
+                        sigma_c = float(norm_stats["std"][c_idx])
+                        ch_m_ae = compute_channel_metrics(
+                            ref_phys[c_idx], rec_phys_ae[c_idx], channel_name=ch_name, sigma_train=sigma_c
+                        )
 
                         # Log AE row for comparison_type="equal_dim"
                         r_ae_dim = create_result_row(
@@ -164,7 +167,10 @@ def evaluate_all_test_folds(
                     rec_phys_dct_dim = denormalize(rec_norm_dct_dim, norm_stats)
 
                     for c_idx, ch_name in enumerate(CHANNEL_NAMES):
-                        ch_m_dct_dim = compute_channel_metrics(ref_phys[c_idx], rec_phys_dct_dim[c_idx], channel_name=ch_name)
+                        sigma_c = float(norm_stats["std"][c_idx])
+                        ch_m_dct_dim = compute_channel_metrics(
+                            ref_phys[c_idx], rec_phys_dct_dim[c_idx], channel_name=ch_name, sigma_train=sigma_c
+                        )
 
                         r_dct_dim = create_result_row(
                             fold=fold, subject=w_meta["subject"], seed=42, dataset="PPG-DaLiA", method="DCT",
@@ -193,7 +199,10 @@ def evaluate_all_test_folds(
                     rec_phys_dct_byte = denormalize(rec_norm_dct_byte, norm_stats)
 
                     for c_idx, ch_name in enumerate(CHANNEL_NAMES):
-                        ch_m_dct_byte = compute_channel_metrics(ref_phys[c_idx], rec_phys_dct_byte[c_idx], channel_name=ch_name)
+                        sigma_c = float(norm_stats["std"][c_idx])
+                        ch_m_dct_byte = compute_channel_metrics(
+                            ref_phys[c_idx], rec_phys_dct_byte[c_idx], channel_name=ch_name, sigma_train=sigma_c
+                        )
 
                         r_dct_byte = create_result_row(
                             fold=fold, subject=w_meta["subject"], seed=42, dataset="PPG-DaLiA", method="DCT",

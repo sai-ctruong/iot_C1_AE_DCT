@@ -13,10 +13,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.make_report import (
     validate_before_report,
-    generate_synthetic_full_results,
     generate_experiment_summary_md,
     make_report,
 )
+from tests.fixtures.synthetic_generator import generate_synthetic_full_results
+
 
 
 import csv
@@ -120,12 +121,28 @@ def test_make_report_pipeline_execution(tmp_path):
 
 
 
+def test_make_report_raises_file_not_found_when_results_missing(tmp_path):
+    """
+    Verify make_report MUST FAIL with FileNotFoundError if results.csv is missing.
+    ZERO synthetic fallback allowed in production make_report.
+    """
+    non_existent_csv = tmp_path / "non_existent_results.csv"
+    out_dir = tmp_path / "report_output"
+
+    with pytest.raises(FileNotFoundError, match="Results file .* not found"):
+        make_report(results_csv_path=non_existent_csv, output_dir=out_dir)
+
+    print("[PASS] make_report correctly raises FileNotFoundError when results.csv is missing!")
+
+
 if __name__ == "__main__":
-    print("=== TASK 24 — AUTOMATED REPORT GENERATOR VERIFICATION SUITE ===")
+    print("=== TASK 24 / TASK 5 — AUTOMATED REPORT GENERATOR VERIFICATION SUITE ===")
     import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
         p = Path(tmpdir)
         test_validate_before_report_pass(p)
         test_validate_before_report_failures(p)
         test_make_report_pipeline_execution(p)
-    print("=== ALL TASK 24 REPORT GENERATOR TESTS PASSED CLEANLY ===")
+        test_make_report_raises_file_not_found_when_results_missing(p)
+    print("=== ALL REPORT GENERATOR TESTS PASSED CLEANLY ===")
+

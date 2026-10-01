@@ -24,17 +24,24 @@ DENOMINATOR_EPS_THRESHOLD = 1e-12
 def compute_channel_metrics(
     x_ref: np.ndarray,
     x_pred: np.ndarray,
-    channel_name: str = "PPG"
+    channel_name: str = "PPG",
+    sigma_train: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Compute RMSE, PRD, and PRDN for a single 1D physical signal channel of length N=512.
 
-    IMPORTANT RULES (TASK 18):
+    IMPORTANT RULES (TASK 4 - C1 SPEC):
     1. x_ref and x_pred MUST be in original physical units (denormalized).
     2. Computed independently per channel (PPG, ACCx, ACCy, ACCz).
     3. PRDN uses mean-centered reference energy in denominator: sum((x_ref - mean_x)^2),
        while numerator is full reconstruction error: sum((x_ref - x_pred)^2).
-    4. Denominator <= 1e-12 sets valid_prd/valid_prdn to False and metric to NaN (no arbitrary epsilon added).
+    4. Denominator threshold rule based on Train statistics:
+       threshold_c = N * 1e-12 * (sigma_c ** 2)
+       where N = len(x_ref) (512), sigma_c = Train std of channel c in current fold.
+    5. If denominator <= threshold_c: valid_prd / valid_prdn set to False and metric to NaN.
+       (No arbitrary epsilon added to denominator).
+    6. Validity mask depends ONLY on reference signal + Train stats. Thus AE and DCT evaluated
+       on the same window/channel produce identical validity masks.
 
     Parameters:
     -----------
@@ -44,6 +51,8 @@ def compute_channel_metrics(
         1D reconstructed physical signal array (length 512).
     channel_name : str
         Name of channel ("PPG", "ACCx", "ACCy", "ACCz").
+    sigma_train : Optional[float]
+        Train standard deviation sigma_c for this channel in current fold.
 
     Returns:
     --------
@@ -60,10 +69,19 @@ def compute_channel_metrics(
     # 1. RMSE (Root Mean Squared Error)
     rmse = math.sqrt(sse / n)
 
+    # Determine denominator threshold using C1 spec formula:
+    # threshold_c = N * 1e-12 * (sigma_c ** 2)
+    if sigma_train is not None and float(sigma_train) > 0:
+        sigma_c = float(sigma_train)
+    else:
+        sigma_c = 1.0
+
+    threshold_c = float(n) * 1e-12 * (sigma_c ** 2)
+
     # 2. PRD (Percentage Relative Distortion)
     # Denominator: total energy of physical signal
-    ref_energy = np.sum(x_ref ** 2)
-    if ref_energy > DENOMINATOR_EPS_THRESHOLD:
+    ref_energy = float(np.sum(x_ref ** 2))
+    if ref_energy > threshold_c:
         prd = math.sqrt(sse / ref_energy) * 100.0
         valid_prd = True
     else:
@@ -72,10 +90,9 @@ def compute_channel_metrics(
 
     # 3. PRDN (Normalized Percentage Relative Distortion)
     # Denominator: mean-centered reference energy sum((x_ref - mean_x)^2)
-    # Numerator: full reconstruction error (sse)
-    ref_mean = np.mean(x_ref)
-    ref_centered_energy = np.sum((x_ref - ref_mean) ** 2)
-    if ref_centered_energy > DENOMINATOR_EPS_THRESHOLD:
+    ref_mean = float(np.mean(x_ref))
+    ref_centered_energy = float(np.sum((x_ref - ref_mean) ** 2))
+    if ref_centered_energy > threshold_c:
         prdn = math.sqrt(sse / ref_centered_energy) * 100.0
         valid_prdn = True
     else:
@@ -97,7 +114,8 @@ def evaluate_window_metrics(
     window_pred: np.ndarray,
     meta: Optional[Dict[str, Any]] = None,
     norm_stats: Optional[Dict[str, Any]] = None,
-    channel_names: List[str] = CHANNEL_NAMES
+    channel_names: List[str] = CHANNEL_NAMES,
+    sigma_trains: Optional[List[float]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Compute per-channel distortion metrics for a single 4x512 signal window.
@@ -116,6 +134,8 @@ def evaluate_window_metrics(
         Normalization statistics dict for denormalizing signals back to physical scale.
     channel_names : List[str]
         List of 4 channel names.
+    sigma_trains : Optional[List[float]]
+        Per-channel Train standard deviations sigma_c.
 
     Returns:
     --------
@@ -150,7 +170,13 @@ def evaluate_window_metrics(
         ch_ref = ref[c_idx]
         ch_pred = pred[c_idx]
 
-        ch_metrics = compute_channel_metrics(ch_ref, ch_pred, channel_name=ch_name)
+        sigma_c = None
+        if sigma_trains is not None and c_idx < len(sigma_trains):
+            sigma_c = float(sigma_trains[c_idx])
+        elif norm_stats is not None and "std" in norm_stats and c_idx < len(norm_stats["std"]):
+            sigma_c = float(norm_stats["std"][c_idx])
+
+        ch_metrics = compute_channel_metrics(ch_ref, ch_pred, channel_name=ch_name, sigma_train=sigma_c)
 
         row = {
             "window_id": meta.get("window_id", "win_unknown"),
@@ -186,9 +212,11 @@ def evaluate_dataset_metrics(
     refs = np.asarray(windows_ref, dtype=np.float64)
     preds = np.asarray(windows_pred, dtype=np.float64)
 
+    sigma_trains = None
     if norm_stats is not None:
         if denormalize is None:
             raise ImportError("denormalize function is not available.")
+        sigma_trains = norm_stats.get("std")
         refs = denormalize(refs, norm_stats).astype(np.float64)
         preds = denormalize(preds, norm_stats).astype(np.float64)
 
@@ -199,7 +227,9 @@ def evaluate_dataset_metrics(
     all_rows = []
     for i in range(num_windows):
         meta = metadata_list[i] if i < len(metadata_list) else {}
-        w_rows = evaluate_window_metrics(refs[i], preds[i], meta=meta, channel_names=channel_names)
+        w_rows = evaluate_window_metrics(
+            refs[i], preds[i], meta=meta, norm_stats=None, channel_names=channel_names, sigma_trains=sigma_trains
+        )
         all_rows.extend(w_rows)
 
     if pd is not None:

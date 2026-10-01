@@ -153,7 +153,10 @@ def run_sanity_check_fold1() -> Dict[str, Any]:
 
                 # Metrics calculation per channel
                 for c_idx, ch_name in enumerate(["PPG", "ACCx", "ACCy", "ACCz"]):
-                    ch_metrics = compute_channel_metrics(ref_phys[c_idx], rec_phys[c_idx], channel_name=ch_name)
+                    sigma_c = float(saved_stats["std"][c_idx])
+                    ch_metrics = compute_channel_metrics(
+                        ref_phys[c_idx], rec_phys[c_idx], channel_name=ch_name, sigma_train=sigma_c
+                    )
 
                     row = create_result_row(
                         fold=1,
@@ -238,7 +241,10 @@ def run_sanity_check_fold1() -> Dict[str, Any]:
 
             # Metrics calculation per channel
             for c_idx, ch_name in enumerate(["PPG", "ACCx", "ACCy", "ACCz"]):
-                ch_metrics = compute_channel_metrics(ref_phys[c_idx], rec_phys[c_idx], channel_name=ch_name)
+                sigma_c = float(saved_stats["std"][c_idx])
+                ch_metrics = compute_channel_metrics(
+                    ref_phys[c_idx], rec_phys[c_idx], channel_name=ch_name, sigma_train=sigma_c
+                )
 
                 row = create_result_row(
                     fold=1,
