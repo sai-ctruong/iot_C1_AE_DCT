@@ -34,7 +34,7 @@ Dự án thực hiện so sánh đối đầu toàn diện giữa:
 | **Train-Only Normalization** | **100% VERIFIED** | Thống kê Z-score ($ddof=0$) được tính **chỉ từ tập Train** cho từng fold. |
 | **Fold 1 Sanity Check** | **18/18 PASS** | End-to-end Sanity Check trên 3,268 Test windows thật của Fold 1 hoàn thành. |
 | **20 Main Runs (5 Folds $\times$ 4 $d_b$)** | **COMPLETED** | **20 real AE checkpoints** ($d_b \in \{16, 8, 4, 2\}$, seed 42) đã được huấn luyện & đánh giá trên 15 subjects thật. |
-| **15 Seed Stability Runs ($d_b=8$)** | **COMPLETED** | **15 real checkpoints** (5 Folds $\times$ 3 Seeds: 42, 123, 999) đã được huấn luyện & đánh giá trên 15 subjects thật. |
+| **15 Seed Stability Runs ($d_b=8$)** | **COMPLETED** | **15 real checkpoints** (5 seed42 reused from main + 10 additional seed123 & seed999 across 5 folds). |
 
 ---
 
@@ -181,7 +181,7 @@ Dự án tuân thủ nghiêm ngặt 10 quy tắc khóa đề cương:
    - Fold 4: Train S1-S9,S15 | Val S13,S14 | Test S10,S11,S12
    - Fold 5: Train S3-S12 | Val S1,S2 | Test S13,S14,S15
 5. **Không dùng Test để Tune:** Tập Test $S1 \dots S15$ hoàn toàn cô lập, chỉ dùng đánh giá final.
-6. **Xử lý denominator gần 0:** Denominator $\le 1e-12$ đánh dấu `valid_prdn = False` và đặt metric `NaN`. Không cộng epsilon tùy tiện vào mẫu số.
+6. **Xử lý denominator gần 0:** Denominator $\le threshold_c$ (với $threshold_c = N \cdot 10^{-12} \cdot \sigma_c^2$) đánh dấu `valid_prdn = False` và đặt metric `NaN`. Không cộng epsilon tùy tiện vào mẫu số.
 
 ---
 
@@ -214,10 +214,10 @@ C1_AE_DCT/
 │   ├── sanity_check_fold1.py           # Script thực thi end-to-end Sanity Check trên Fold 1 Test
 │   ├── pilot_run.py                    # Pilot run huấn luyện trên dữ liệu thật PPG-DaLiA
 │   ├── run_main_experiments.py         # Launcher 20 Main Runs (5 Folds x 4 db)
-│   ├── run_seed_experiments.py         # Launcher 10 Seed Runs (db=8, seeds 42, 123, 999)
+│   ├── run_seed_experiments.py         # Launcher 10 Seed Runs (db=8, seeds 123, 999 across 5 folds + 5 reused seed 42 runs)
 │   ├── make_report.py                  # Script tổng hợp báo cáo và vẽ đồ thị khoa học
 │   └── utils.py                        # Helper functions & kiểm tra phần cứng
-├── tests/                              # Suite chứa 75 Unit & Integration Tests
+├── tests/                              # Suite chứa 78 Unit & Integration Tests
 │   ├── test_real_pipeline.py           # Suite 15 integration test cases kiểm thử pipeline thật
 │   └── ...
 ├── checkpoints/                        # Lưu trữ model weights (.pt) sinh từ dữ liệu thật

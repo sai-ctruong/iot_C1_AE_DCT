@@ -268,7 +268,19 @@ def compute_joint_valid_mask(
 
 
 def evaluate_model(model=None, test_loader=None) -> Dict[str, float]:
-    """Placeholder evaluation model function for project stub integration."""
-    print("[C1_AE_DCT] Evaluation module initialized.")
-    return {"loss": 0.0, "psnr": 0.0, "ssim": 0.0}
+    """
+    DEPRECATED: Legacy stub function.
+    
+    Use evaluate_dataset_metrics() or evaluate_window_metrics() for real channel-level
+    distortion evaluation on PPG-DaLiA dataset.
+    """
+    import warnings
+    warnings.warn(
+        "evaluate_model() is deprecated. Use evaluate_dataset_metrics() for real evaluation.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    raise NotImplementedError(
+        "evaluate_model() is deprecated. Use evaluate_dataset_metrics() for real PPG-DaLiA evaluation."
+    )
 
