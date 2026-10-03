@@ -1,4 +1,4 @@
-# 🫀 C1_AE_DCT — Wearable IoT Signal Compression Pipeline
+# C1_AE_DCT — Wearable IoT Signal Compression Pipeline
 > **Deep 1D-CNN Autoencoder vs. Discrete Cosine Transform (DCT-II) Baseline on PPG-DaLiA Dataset**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
@@ -9,7 +9,7 @@
 
 ---
 
-## 📌 OVERVIEW (TỔNG QUAN ĐỀ TÀI)
+## OVERVIEW (TỔNG QUAN ĐỀ TÀI)
 
 Dự án nghiên cứu và triển khai hệ thống **nén dữ liệu tín hiệu sinh học nhiều kênh trên thiết bị đeo IoT (Wearable Edge Computing)**. 
 
@@ -21,7 +21,7 @@ Dự án thực hiện so sánh đối đầu toàn diện giữa:
 
 ---
 
-## 🏆 CURRENT EXPERIMENT STATUS DASHBOARD
+## CURRENT EXPERIMENT STATUS DASHBOARD
 
 > [!IMPORTANT]
 > **Phân định Rõ ràng giữa Dữ liệu Thử nghiệm Synthetic và Real Data:**
@@ -29,16 +29,16 @@ Dự án thực hiện so sánh đối đầu toàn diện giữa:
 
 | Hạng mục Kiểm định | Trạng thái | Chi tiết & Kết quả thực nghiệm |
 | :--- | :---: | :--- |
-| **Unit & Integration Test Suite** | 🟢 **100% PASS** | **78/78 tests PASSED** (63 unit tests + 15 real integration tests). |
-| **PPG-DaLiA Dataset Integration** | 🟢 **100% VERIFIED** | Đã phát hiện & bóc tách đủ 15 subjects ($S1 \dots S15$, 0 NaN, 0 Inf). |
-| **Train-Only Normalization** | 🟢 **100% VERIFIED** | Thống kê Z-score ($ddof=0$) được tính **chỉ từ tập Train** cho từng fold. |
-| **Fold 1 Sanity Check** | 🟢 **18/18 PASS** | End-to-end Sanity Check trên 3,268 Test windows thật của Fold 1 hoàn thành. |
-| **20 Main Runs (5 Folds $\times$ 4 $d_b$)** | 🟢 **COMPLETED** | **20 real AE checkpoints** ($d_b \in \{16, 8, 4, 2\}$, seed 42) đã được huấn luyện & đánh giá trên 15 subjects thật. |
-| **15 Seed Stability Runs ($d_b=8$)** | 🟢 **COMPLETED** | **15 real checkpoints** (5 Folds $\times$ 3 Seeds: 42, 123, 999) đã được huấn luyện & đánh giá trên 15 subjects thật. |
+| **Unit & Integration Test Suite** | **100% PASS** | **78/78 tests PASSED** (63 unit tests + 15 real integration tests). |
+| **PPG-DaLiA Dataset Integration** | **100% VERIFIED** | Đã phát hiện & bóc tách đủ 15 subjects ($S1 \dots S15$, 0 NaN, 0 Inf). |
+| **Train-Only Normalization** | **100% VERIFIED** | Thống kê Z-score ($ddof=0$) được tính **chỉ từ tập Train** cho từng fold. |
+| **Fold 1 Sanity Check** | **18/18 PASS** | End-to-end Sanity Check trên 3,268 Test windows thật của Fold 1 hoàn thành. |
+| **20 Main Runs (5 Folds $\times$ 4 $d_b$)** | **COMPLETED** | **20 real AE checkpoints** ($d_b \in \{16, 8, 4, 2\}$, seed 42) đã được huấn luyện & đánh giá trên 15 subjects thật. |
+| **15 Seed Stability Runs ($d_b=8$)** | **COMPLETED** | **15 real checkpoints** (5 Folds $\times$ 3 Seeds: 42, 123, 999) đã được huấn luyện & đánh giá trên 15 subjects thật. |
 
 ---
 
-## 🏗️ SYSTEM ARCHITECTURE & DATA FLOW
+## SYSTEM ARCHITECTURE & DATA FLOW
 
 Dưới đây là sơ đồ luồng dữ liệu end-to-end từ file pickle thô đến các chỉ số đánh giá nén:
 
@@ -80,7 +80,7 @@ flowchart TD
 
 ---
 
-## ⚡ QUICK START (HƯỚNG DẪN CHẠY NHANH)
+## QUICK START (HƯỚNG DẪN CHẠY NHANH)
 
 ### 1. Thiết lập Môi trường
 
@@ -137,7 +137,7 @@ jupyter notebook notebooks/C1_AE_DCT_Demo.ipynb
 
 ---
 
-## 📊 EMPIRICAL SANITY CHECK RESULTS (FOLD 1 TEST SET)
+## EMPIRICAL SANITY CHECK RESULTS (FOLD 1 TEST SET)
 
 Sanity Check đã chạy thành công trên toàn bộ **3,268 cửa sổ Test thật của Fold 1** (Subjects $S1, S2, S3$).
 
@@ -147,9 +147,9 @@ Tất cả các bitstream được đóng gói với **16-byte Header tiêu chu�
 
 | Phương pháp (Method) | $d_b$ | $M$ / $K$ | Padding Bytes | Kích thước Bitstream (Bytes/Window) | Ngân sách Byte so với AE ($B_{\text{AE}}$) | Codec Check |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **AE Pilot** | 8 | $M=256$ | 0 | **1,040 B** | Baseline | 🟢 **PASS** |
-| **DCT Equal-Dim** | 8 | $K=256$ | 0 | **1,552 B** | $+49.2\%$ | 🟢 **PASS** |
-| **DCT Equal-Byte** | 8 | $K=170$ | 4 | **1,040 B** | $\equiv B_{\text{AE}}$ (**Khớp 100%**) | 🟢 **PASS** |
+| **AE Pilot** | 8 | $M=256$ | 0 | **1,040 B** | Baseline | **PASS** |
+| **DCT Equal-Dim** | 8 | $K=256$ | 0 | **1,552 B** | $+49.2\%$ | **PASS** |
+| **DCT Equal-Byte** | 8 | $K=170$ | 4 | **1,040 B** | $\equiv B_{\text{AE}}$ (**Khớp 100%**) | **PASS** |
 
 ### 2. Bảng Thống kê Chỉ số Méo dạng (Mean $\pm$ Std ngang Subjects Tập Test)
 
@@ -168,7 +168,7 @@ Tất cả các bitstream được đóng gói với **16-byte Header tiêu chu�
 
 ---
 
-## 🎯 SPECIAL SCIENTIFIC SPECIFICATIONS (QUY TẮC ĐỀ TƯƠNG KHOA HỌC)
+## SPECIAL SCIENTIFIC SPECIFICATIONS (QUY TẮC ĐỀ TƯƠNG KHOA HỌC)
 
 Dự án tuân thủ nghiêm ngặt 10 quy tắc khóa đề cương:
 1. **Không đổi đề tài:** Giữ nguyên bài toán nén tín hiệu PPG & ACC trên thiết bị đeo IoT.
@@ -185,7 +185,7 @@ Dự án tuân thủ nghiêm ngặt 10 quy tắc khóa đề cương:
 
 ---
 
-## 📂 DIRECTORY STRUCTURE (CẤU TRÚC THƯ MỤC)
+## DIRECTORY STRUCTURE (CẤU TRÚC THƯ MỤC)
 
 ```text
 C1_AE_DCT/
@@ -234,7 +234,7 @@ C1_AE_DCT/
 
 ---
 
-## 💻 HARDWARE & SOFTWARE SPECIFICATIONS
+## HARDWARE & SOFTWARE SPECIFICATIONS
 
 | Thông số | Chi tiết Môi trường Thực nghiệm |
 | :--- | :--- |
@@ -247,7 +247,7 @@ C1_AE_DCT/
 
 ---
 
-## 📜 CITATION & REFERENCES
+## CITATION & REFERENCES
 
 1. **PPG-DaLiA Dataset Reference:**
    > Reiss, A., Indlekofer, I., Schmidt, P., & Van Laerhoven, K. (2019). *Deep PPG: Large-Scale Heart Rate Estimation from Photoplethysmography Using Convolutional Neural Networks*. Sensors, 19(14), 3079.
