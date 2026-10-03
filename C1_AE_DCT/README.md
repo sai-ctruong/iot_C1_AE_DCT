@@ -124,6 +124,17 @@ python -m src.sanity_check_fold1
 python -m pytest tests/
 ```
 
+### 6. Trực quan hóa & Demo bằng Jupyter Notebook
+
+Khởi chạy Notebook minh họa end-to-end pipeline:
+
+```bash
+jupyter notebook notebooks/C1_AE_DCT_Demo.ipynb
+```
+
+> [!NOTE]
+> Jupyter Notebook `notebooks/C1_AE_DCT_Demo.ipynb` được thiết kế chuyên biệt cho việc trực quan hóa, kiểm chứng từng bước và hỗ trợ thuyết trình/báo cáo. Tất cả các thí nghiệm chính thức (20 main runs và 15 seed runs) được vận hành bằng các script tự động trong thư mục `src/*.py`.
+
 ---
 
 ## 📊 EMPIRICAL SANITY CHECK RESULTS (FOLD 1 TEST SET)
