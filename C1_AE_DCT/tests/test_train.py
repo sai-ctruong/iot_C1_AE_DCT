@@ -63,10 +63,19 @@ def test_training_loop_execution():
     ckpt_dir = PROJECT_ROOT / "checkpoints"
     log_dir = PROJECT_ROOT / "logs"
 
+    # Create test fixture windows for test suite dry run
+    train_windows = np.random.randn(32, 4, 512).astype(np.float32)
+    val_windows_by_subject = {
+        "S4": np.random.randn(8, 4, 512).astype(np.float32),
+        "S5": np.random.randn(8, 4, 512).astype(np.float32),
+    }
+
     # Run 3 epochs dry run for Fold 1, d_b = 16
     results = train_model(
         fold=1,
         d_b=16,
+        train_windows=train_windows,
+        val_windows_by_subject=val_windows_by_subject,
         max_epoch=3,
         batch_size=16,
         early_stopping_patience=2,

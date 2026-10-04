@@ -10,9 +10,11 @@ HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # Exactly 16 bytes
 
 MAGIC_AE = b"C1AE"
 MAGIC_DCT = b"C1DC"
+MAGIC_DCT_FIXED = b"C1DF"
 
 CODEC_ID_AE = 1
 CODEC_ID_DCT = 2
+CODEC_ID_DCT_FIXED = 3
 
 
 def encode_ae_bytes(
@@ -235,6 +237,102 @@ def decode_dct_bytes(bitstream: bytes) -> Tuple[np.ndarray, np.ndarray, Dict[str
     return topk_values, topk_indices, header_info
 
 
+def encode_dct_fixed_lf_bytes(
+    values: np.ndarray,
+    d_b: int = 0,
+    profile_id: int = 0
+) -> bytes:
+    """
+    Encode DCT Fixed Low-Frequency values into binary bitstream with 16-byte header.
+    NO coefficient indices are transmitted because positions are fixed by configuration.
+
+    Binary Format:
+    - Header (16 bytes): magic="C1DF", codec_id=3, d_b, count=K, profile_id, payload_bytes=4*K
+    - Payload (4*K bytes): K float32 values in little-endian
+
+    Total Bitstream Length: B_DCT_FIXED = 16 + 4 * K bytes
+
+    Parameters:
+    -----------
+    values : np.ndarray
+        Fixed low-frequency coefficient values of shape (K,) in float32.
+    d_b : int
+        Budget factor or identifier (default: 0).
+    profile_id : int
+        Profile identifier (default: 0).
+
+    Returns:
+    --------
+    bitstream : bytes
+        Binary payload with exact length 16 + 4 * K.
+    """
+    vals = np.asarray(values, dtype="<f4").ravel()
+    k_count = len(vals)
+
+    payload_bytes = k_count * 4
+    header = struct.pack(
+        HEADER_FORMAT,
+        MAGIC_DCT_FIXED,
+        CODEC_ID_DCT_FIXED,
+        int(d_b),
+        int(k_count),
+        int(profile_id),
+        int(payload_bytes)
+    )
+
+    payload = vals.tobytes()
+    bitstream = header + payload
+
+    expected_len = 16 + 4 * k_count
+    assert len(bitstream) == expected_len, f"DCT-Fixed-LF bitstream length mismatch: {len(bitstream)} != {expected_len}"
+
+    return bitstream
+
+
+def decode_dct_fixed_lf_bytes(bitstream: bytes) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """
+    Decode binary bitstream into DCT Fixed Low-Frequency float32 values and header metadata.
+
+    Parameters:
+    -----------
+    bitstream : bytes
+        Binary payload containing 16-byte header + float32 values.
+
+    Returns:
+    --------
+    values : np.ndarray
+        Decoded 1D float32 array of shape (K,).
+    header_info : Dict[str, Any]
+        Header metadata dictionary.
+    """
+    if len(bitstream) < HEADER_SIZE:
+        raise ValueError(f"Bitstream length ({len(bitstream)}) is smaller than header size ({HEADER_SIZE})")
+
+    magic, codec_id, d_b, count, profile_id, payload_bytes = struct.unpack(HEADER_FORMAT, bitstream[:HEADER_SIZE])
+
+    if magic != MAGIC_DCT_FIXED or codec_id != CODEC_ID_DCT_FIXED:
+        raise ValueError(f"Invalid DCT-Fixed-LF header magic/codec_id: magic={magic}, codec_id={codec_id}")
+
+    expected_len = HEADER_SIZE + payload_bytes
+    if len(bitstream) != expected_len:
+        raise ValueError(f"Bitstream payload length mismatch: actual {len(bitstream)} != expected {expected_len}")
+
+    values = np.frombuffer(bitstream[HEADER_SIZE:expected_len], dtype="<f4").astype(np.float32)
+
+    header_info = {
+        "magic": magic.decode("ascii", errors="ignore"),
+        "codec_id": codec_id,
+        "d_b": d_b,
+        "count": count,
+        "profile_id": profile_id,
+        "payload_bytes": payload_bytes,
+        "header_size": HEADER_SIZE,
+        "total_bytes": len(bitstream),
+    }
+
+    return values, header_info
+
+
 class C1Codec:
     """Class wrapper for reference binary codec."""
     @staticmethod
@@ -252,3 +350,12 @@ class C1Codec:
     @staticmethod
     def decode_dct(bitstream: bytes) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
         return decode_dct_bytes(bitstream)
+
+    @staticmethod
+    def encode_dct_fixed_lf(values: np.ndarray, d_b: int = 0) -> bytes:
+        return encode_dct_fixed_lf_bytes(values, d_b)
+
+    @staticmethod
+    def decode_dct_fixed_lf(bitstream: bytes) -> Tuple[np.ndarray, Dict[str, Any]]:
+        return decode_dct_fixed_lf_bytes(bitstream)
+

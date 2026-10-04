@@ -135,18 +135,16 @@ def train_model(
     ckpt_file = ckpt_path_dir / f"best_model_fold{fold}_db{d_b}.pt"
     log_file = log_path_dir / f"train_log_fold{fold}_db{d_b}.json"
 
-    # Handle synthetic/dummy data fallback for dry-run testing if no windows provided
     if train_windows is None:
-        print("[WARNING] No train_windows provided. Generating synthetic training data for dry-run verification.")
-        train_windows = np.random.randn(256, 4, 512).astype(np.float32)
+        raise ValueError(
+            "Real training windows are required. "
+            "Run the preprocessing pipeline and provide train_windows."
+        )
 
     if val_windows_by_subject is None:
-        folds_info = load_folds()
-        val_subjs = folds_info[f"fold_{fold}"]["val"]
-        val_windows_by_subject = {
-            subj: np.random.randn(32, 4, 512).astype(np.float32)
-            for subj in val_subjs
-        }
+        raise ValueError(
+            "Real validation windows grouped by subject are required."
+        )
 
     # Prepare Train DataLoader (SHUFFLE ONLY TRAIN)
     train_tensor = torch.as_tensor(train_windows, dtype=torch.float32)
@@ -254,4 +252,4 @@ def train_model(
 
 
 if __name__ == "__main__":
-    train_model(fold=1, d_b=16, max_epoch=3, batch_size=32)
+    print("[INFO] src.train provides train_model(). Use src.run_main_experiments or src.pilot_run with real data.")

@@ -193,3 +193,195 @@ class BaselineDCT:
 
     def reconstruct(self, window: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, int]]:
         return dct_reconstruct(window, self.k)
+
+
+def get_fixed_lf_channel_allocation(k: int) -> Dict[str, int]:
+    """
+    Distribute total budget K across 4 channels (PPG, ACCx, ACCy, ACCz) as evenly as possible.
+    Remainder r = K % 4 is assigned to channels in fixed order: PPG, ACCx, ACCy, ACCz.
+
+    Parameters:
+    -----------
+    k : int
+        Total number of DCT coefficients to retain (1 <= k <= 2048).
+
+    Returns:
+    --------
+    channel_counts : Dict[str, int]
+        Dictionary mapping each channel name to its allocated coefficient count.
+    """
+    num_channels = len(CHANNEL_NAMES)
+    base = k // num_channels
+    rem = k % num_channels
+
+    counts = {
+        ch: base + (1 if i < rem else 0)
+        for i, ch in enumerate(CHANNEL_NAMES)
+    }
+    return counts
+
+
+def get_fixed_lf_indices(k: int) -> np.ndarray:
+    """
+    Get deterministic 1D array of flat coefficient indices [0..2047] corresponding to
+    the lowest-frequency coefficients assigned to each channel.
+
+    For channel c with count K_c, the retained coefficient indices within that channel are 0..K_c-1.
+    Flat index = c * 512 + index_in_channel.
+
+    Parameters:
+    -----------
+    k : int
+        Total number of DCT coefficients.
+
+    Returns:
+    --------
+    fixed_indices : np.ndarray
+        1D uint16 array of shape (K,) containing flat indices.
+    """
+    counts = get_fixed_lf_channel_allocation(k)
+    indices_list = []
+    num_samples = 512
+
+    for ch_idx, ch in enumerate(CHANNEL_NAMES):
+        k_c = counts[ch]
+        if k_c > 0:
+            ch_indices = ch_idx * num_samples + np.arange(k_c, dtype=np.uint16)
+            indices_list.append(ch_indices)
+
+    if not indices_list:
+        return np.array([], dtype=np.uint16)
+
+    return np.concatenate(indices_list).astype(np.uint16)
+
+
+def dct_encode_fixed_lf(
+    window: np.ndarray,
+    k: int
+) -> Tuple[np.ndarray, Dict[str, int], np.ndarray]:
+    """
+    Perform DCT-II on 4-channel window signal and extract fixed low-frequency coefficients per channel.
+
+    Parameters:
+    -----------
+    window : np.ndarray
+        Signal window matrix of shape (4, 512) or (B, 4, 512).
+    k : int
+        Total number of lowest-frequency coefficients to retain (1 <= k <= 2048).
+
+    Returns:
+    --------
+    fixed_values : np.ndarray
+        Array of shape (K,) or (B, K) containing retained float32 low-frequency values.
+    channel_counts : Dict[str, int]
+        Number of retained coefficients per channel.
+    sparse_dct : np.ndarray
+        Sparse DCT array of shape (4, 512) or (B, 4, 512) with unselected coefficients zeroed out.
+    """
+    if fft is None:
+        raise ImportError("scipy is required for DCT operations. Please install requirements.txt.")
+
+    arr = np.asarray(window, dtype=np.float64)
+    is_batch = False
+
+    if arr.ndim == 2:
+        if arr.shape != (4, 512):
+            if arr.shape == (512, 4):
+                arr = arr.T
+            else:
+                raise ValueError(f"Expected window shape (4, 512), got {arr.shape}")
+    elif arr.ndim == 3:
+        is_batch = True
+        if arr.shape[1:] != (4, 512):
+            raise ValueError(f"Expected batch shape (B, 4, 512), got {arr.shape}")
+    else:
+        raise ValueError(f"Input must be 2D (4, 512) or 3D (B, 4, 512), got shape {arr.shape}")
+
+    total_coeffs = 4 * 512
+    if not (1 <= k <= total_coeffs):
+        raise ValueError(f"k must be between 1 and {total_coeffs}, got {k}")
+
+    channel_counts = get_fixed_lf_channel_allocation(k)
+    fixed_indices = get_fixed_lf_indices(k)
+
+    # 1. Apply DCT-II independently on time axis for each channel
+    dct_coeffs = fft.dct(arr, type=2, norm="ortho", axis=-1)
+
+    if not is_batch:
+        flat_coeffs = dct_coeffs.ravel()
+        fixed_values = flat_coeffs[fixed_indices]
+
+        sparse_dct = np.zeros_like(dct_coeffs)
+        np.put(sparse_dct, fixed_indices, fixed_values)
+
+        return fixed_values.astype(np.float32), channel_counts, sparse_dct.astype(np.float32)
+    else:
+        batch_size = arr.shape[0]
+        fixed_values_list = []
+        sparse_dct_list = []
+
+        for b in range(batch_size):
+            flat = dct_coeffs[b].ravel()
+            vals = flat[fixed_indices]
+            sp_dct = np.zeros_like(dct_coeffs[b])
+            np.put(sp_dct, fixed_indices, vals)
+
+            fixed_values_list.append(vals)
+            sparse_dct_list.append(sp_dct)
+
+        return (
+            np.array(fixed_values_list, dtype=np.float32),
+            channel_counts,
+            np.array(sparse_dct_list, dtype=np.float32),
+        )
+
+
+def dct_decode_fixed_lf(sparse_dct: np.ndarray) -> np.ndarray:
+    """
+    Perform IDCT-II on sparse DCT-Fixed-LF matrix to reconstruct time-domain signal.
+    """
+    return dct_decode(sparse_dct)
+
+
+def dct_reconstruct_fixed_lf(
+    window: np.ndarray,
+    k: int
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, int]]:
+    """
+    Full DCT-Fixed-LF compression and reconstruction pipeline.
+
+    Parameters:
+    -----------
+    window : np.ndarray
+        Input signal window matrix of shape (4, 512).
+    k : int
+        Total low-frequency DCT coefficients to retain.
+
+    Returns:
+    --------
+    reconstructed_signal : np.ndarray
+        Reconstructed signal of shape (4, 512).
+    fixed_values : np.ndarray
+        Fixed low-frequency coefficient values of shape (K,).
+    channel_counts : Dict[str, int]
+        Count of retained coefficients per channel.
+    """
+    fixed_values, channel_counts, sparse_dct = dct_encode_fixed_lf(window, k)
+    reconstructed_signal = dct_decode_fixed_lf(sparse_dct)
+    return reconstructed_signal, fixed_values, channel_counts
+
+
+class BaselineDCTFixedLF:
+    """Class wrapper for DCT Fixed Low-Frequency baseline model."""
+    def __init__(self, k: int = 128):
+        self.k = k
+
+    def encode(self, window: np.ndarray) -> Tuple[np.ndarray, Dict[str, int], np.ndarray]:
+        return dct_encode_fixed_lf(window, self.k)
+
+    def decode(self, sparse_dct: np.ndarray) -> np.ndarray:
+        return dct_decode_fixed_lf(sparse_dct)
+
+    def reconstruct(self, window: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[str, int]]:
+        return dct_reconstruct_fixed_lf(window, self.k)
+
