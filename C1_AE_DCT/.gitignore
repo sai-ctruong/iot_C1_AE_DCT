@@ -35,3 +35,8 @@ logs/
 # Keep results
 !results/
 results/results.csv
+
+# LMS Package Deliverables
+SUBMISSION_C1_AE_DCT/
+*.zip
+
