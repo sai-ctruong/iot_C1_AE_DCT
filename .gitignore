@@ -1,34 +1,32 @@
-# Python cache and bytecode
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
 
-# Virtual Environments
+# Environments & IDEs
 .venv/
 venv/
-env/
 ENV/
-
-# Testing & Coverage
-.pytest_cache/
-.coverage
-htmlcov/
-
-# IDE & Editor settings
+env/
+.env
+.ipynb_checkpoints/
 .idea/
 .vscode/
 *.swp
-*.swo
 
-# Large raw datasets & processed binary files
-C1_AE_DCT/data/raw/*.pkl
-C1_AE_DCT/data/processed/**/*.npz
-ppg+dalia/
-*.pkl
-*.npz
-
-# OS metadata
+# OS generated files
 .DS_Store
 Thumbs.db
 
+# Dataset (Do NOT track full PPG-DaLiA raw data)
+data/raw/*
+!data/raw/.gitkeep
+
+# External dataset folder
+ppg+dalia/
+
+# Submissions and zip archives
+*.zip
+SUBMISSION_C1_AE_DCT/
